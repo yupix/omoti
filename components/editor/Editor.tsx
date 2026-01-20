@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2 } from 'lucide-react';
+import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen } from 'lucide-react';
 import { Clip, Track, ClipType } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -151,6 +151,60 @@ export default function Editor() {
 
     const handleTrackNameChange = (id: number, newName: string) => {
         setTracks(tracks.map(t => t.id === id ? { ...t, name: newName } : t));
+    };
+
+    const handleRemoveTrack = (id: number) => {
+        if (confirm('Are you sure you want to delete this track? All clips on it will be removed.')) {
+            setTracks(tracks.filter(t => t.id !== id));
+            setClips(clips.filter(c => c.trackId !== id));
+        }
+    };
+
+    const handleSaveProject = () => {
+        const projectData = {
+            version: 1,
+            tracks,
+            clips,
+            primaryColor,
+            totalFrames,
+        };
+        const blob = new Blob([JSON.stringify(projectData, null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `omoti-project-${new Date().toISOString().split('T')[0]}.json`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
+    };
+
+    const handleLoadProject = (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        const reader = new FileReader();
+        reader.onload = (event) => {
+            try {
+                const json = JSON.parse(event.target?.result as string);
+                if (json.version === 1 && Array.isArray(json.tracks) && Array.isArray(json.clips)) {
+                    setTracks(json.tracks);
+                    setClips(json.clips);
+                    if (json.primaryColor) setPrimaryColor(json.primaryColor);
+                    // Reset selection and player
+                    setSelectedClipId(null);
+                    alert('Project loaded successfully!');
+                } else {
+                    alert('Invalid project file format.');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Failed to parse project file.');
+            }
+        };
+        reader.readAsText(file);
+        // Reset input
+        e.target.value = '';
     };
 
     const handleExport = async () => {
@@ -385,8 +439,18 @@ export default function Editor() {
                 {/* Preview Area */}
                 <main className="flex-1 flex flex-col bg-stone-950 relative overflow-hidden">
                     <header className="h-14 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md z-10">
-                        <div className="text-sm text-muted-foreground">
-                            Project: <span className="text-foreground font-medium">New Video 01</span>
+                        <div className="text-sm text-muted-foreground flex items-center gap-4">
+                            <span>Project: <span className="text-foreground font-medium">New Video 01</span></span>
+                            <div className="h-4 w-px bg-border"></div>
+                            <div className="flex items-center gap-1">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveProject} title="Save Project">
+                                    <Save size={16} />
+                                </Button>
+                                <label className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8" title="Load Project">
+                                    <FolderOpen size={16} />
+                                    <input type="file" className="hidden" accept=".json" onChange={handleLoadProject} />
+                                </label>
+                            </div>
                         </div>
                         <Button
                             className="h-8 shadow-[0_0_20px_rgba(109,40,217,0.3)] transition-all hover:shadow-[0_0_30px_rgba(109,40,217,0.5)]"
@@ -457,6 +521,7 @@ export default function Editor() {
                     onClipMove={handleClipMove}
                     onAddTrack={handleAddTrack}
                     onUpdateTrackName={handleTrackNameChange}
+                    onRemoveTrack={handleRemoveTrack}
                     selectedClipId={selectedClipId}
                     totalFrames={totalFrames}
                 />

@@ -2,7 +2,7 @@ import React, { useRef, useState, useEffect } from 'react';
 import { Clip, Track } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
-import { Plus } from 'lucide-react';
+import { Plus, X } from 'lucide-react';
 
 interface TimelineProps {
     tracks: Track[];
@@ -13,6 +13,7 @@ interface TimelineProps {
     onClipMove: (clipId: string, newStartFrame: number, newTrackId: number) => void;
     onAddTrack: () => void;
     onUpdateTrackName: (id: number, newName: string) => void;
+    onRemoveTrack: (id: number) => void;
     selectedClipId: string | null;
     totalFrames: number;
 }
@@ -31,6 +32,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     onClipMove,
     onAddTrack,
     onUpdateTrackName,
+    onRemoveTrack,
     selectedClipId,
     totalFrames,
 }) => {
@@ -142,12 +144,20 @@ export const Timeline: React.FC<TimelineProps> = ({
                         {tracks.map(track => (
                             <div key={track.id} className="h-12 border-b border-border/20 flex relative group hover:bg-white/5 transition-colors">
                                 {/* Track Header (Sticky Left) */}
-                                <div className="w-48 flex-shrink-0 bg-card border-r border-border sticky left-0 z-10 flex items-center px-2">
+                                <div className="w-48 flex-shrink-0 bg-card border-r border-border sticky left-0 z-10 flex items-center px-2 gap-2 group/header">
                                     <input
                                         className="bg-transparent border-none text-xs font-medium text-muted-foreground w-full focus:text-foreground focus:outline-none"
                                         value={track.name}
                                         onChange={(e) => onUpdateTrackName(track.id, e.target.value)}
                                     />
+                                    <Button
+                                        variant="ghost"
+                                        size="icon"
+                                        className="h-6 w-6 opacity-0 group-hover/header:opacity-100 transition-opacity text-muted-foreground hover:text-destructive shrink-0"
+                                        onClick={() => onRemoveTrack(track.id)}
+                                    >
+                                        <X size={12} />
+                                    </Button>
                                 </div>
 
                                 {/* Track Lane Content */}
