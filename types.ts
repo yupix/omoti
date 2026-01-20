@@ -14,6 +14,10 @@ export interface Clip {
         type: 'fade' | 'pop' | 'slide' | 'none';
         duration: number; // in frames
     };
+    x?: number; // Position X (pixels)
+    y?: number; // Position Y (pixels)
+    width?: number; // Width (pixels)
+    height?: number; // Height (pixels)
 }
 
 export interface Track {

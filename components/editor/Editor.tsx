@@ -11,6 +11,7 @@ import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as Video
 import { Clip, Track, ClipType } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { InteractOverlay } from './InteractOverlay';
 
 const INITIAL_TRACKS: Track[] = [
     { id: 1, name: 'Overlay Text' },
@@ -69,6 +70,11 @@ export default function Editor() {
     const handleUpdateClip = (key: keyof Clip, value: any) => {
         if (!selectedClipId) return;
         setClips(clips.map(c => c.id === selectedClipId ? { ...c, [key]: value } : c));
+    };
+
+    const handleBatchUpdateClip = (updates: Partial<Clip>) => {
+        if (!selectedClipId) return;
+        setClips(clips.map(c => c.id === selectedClipId ? { ...c, ...updates } : c));
     };
 
     const handleUpdateStyle = (key: string, value: any) => {
@@ -540,6 +546,12 @@ export default function Editor() {
                                         width: '100%',
                                         height: '100%',
                                     }}
+                                />
+                                <InteractOverlay
+                                    clip={selectedClip}
+                                    onUpdate={handleBatchUpdateClip}
+                                    width={1280}
+                                    height={720}
                                 />
                             </div>
                         </div>

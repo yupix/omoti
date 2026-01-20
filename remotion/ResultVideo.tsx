@@ -11,6 +11,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     const { fps } = useVideoConfig();
 
     // Calculate Animation Styles
+    // Calculate Animation Styles
     let animationStyle: React.CSSProperties = { opacity: 1, transform: 'scale(1)' };
 
     if (clip.animation?.type === 'fade') {
@@ -31,17 +32,24 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
         animationStyle.opacity = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: 'clamp' });
     }
 
-    // Render text with simple inline styles
+    // Base positioning style
+    const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
+    const positionStyle: React.CSSProperties = {
+        position: 'absolute',
+        left: isPositioned ? clip.x : 0,
+        top: isPositioned ? clip.y : 0,
+        width: isPositioned ? (clip.width || 400) : '100%',
+        height: isPositioned ? (clip.height || 400) : '100%',
+        display: 'flex',
+        justifyContent: 'center',
+        alignItems: 'center',
+        ...animationStyle,
+    };
+
+    // Render text
     if (clip.type === 'text') {
         return (
-            <div style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                ...animationStyle
-            }}>
+            <div style={positionStyle}>
                 <h1 style={{
                     fontFamily: 'sans-serif',
                     fontSize: '80px',
@@ -59,20 +67,14 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
 
     if (clip.type === 'code') {
         return (
-            <div style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                ...animationStyle
-            }}>
+            <div style={positionStyle}>
                 <div style={{
                     backgroundColor: '#1e1e1e',
                     padding: '40px',
                     borderRadius: '16px',
                     border: '1px solid #333',
                     boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                    minWidth: '300px', // ensure some width if scaling down
                     ...clip.style
                 }}>
                     <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '32px', color: '#d4d4d4', whiteSpace: 'pre-wrap' }}>
@@ -85,14 +87,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
 
     if (clip.type === 'image') {
         return (
-            <div style={{
-                width: '100%',
-                height: '100%',
-                display: 'flex',
-                justifyContent: 'center',
-                alignItems: 'center',
-                ...animationStyle
-            }}>
+            <div style={positionStyle}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
                 <img
                     src={clip.content}
@@ -100,7 +95,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                     style={{
                         width: '100%',
                         height: '100%',
-                        objectFit: 'cover',
+                        objectFit: 'cover', // Or contain? Cover fills the box.
                         ...clip.style
                     }}
                 />
@@ -110,35 +105,18 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
 
     if (clip.type === 'shape') {
         const isCircle = clip.content === 'circle';
+        // Shapes fill their container box now
         return (
-            <div style={{
-                position: 'absolute',
-                top: 0, left: 0, right: 0, bottom: 0,
-                display: 'flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                ...animationStyle
-            }}>
+            <div style={positionStyle}>
                 <div style={{
-                    width: 200,
-                    height: 200,
+                    width: '100%',
+                    height: '100%',
                     backgroundColor: 'white',
                     borderRadius: isCircle ? '50%' : '0px',
                     ...clip.style
                 }} />
             </div>
         );
-    }
-
-    if (clip.type === 'video') {
-        // Video handling can be complex with Video component,
-        // but for now we might leave it as placeholder or implement standard Video
-        // Let's use Remotion's Video component if we were importing it, 
-        // but since we are simple, maybe just skip or add a TODO.
-        // Actually, let's just leave the simple text placeholder if I haven't implemented Video yet,
-        // OR implement it now. The user didn't explicitly ask for Video fix but implied it exists.
-        // Let's standardise the structure first.
-        return null;
     }
 
     if (clip.type === 'audio') {
