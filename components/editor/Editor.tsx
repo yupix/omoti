@@ -516,14 +516,14 @@ export default function Editor() {
                         </Button>
                     </header>
 
-                    <div className="flex-1 flex flex-col relative">
+                    <div className="flex-1 flex flex-col relative min-h-0">
                         {/* Viewport */}
                         <div className="flex-1 flex items-center justify-center bg-stone-950/20 p-8 overflow-hidden relative" onClick={() => setSelectedClipId(null)}>
                             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
                             {/* Grid pattern */}
                             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)] pointer-events-none" />
                             {/* Video Player */}
-                            <div className="relative shadow-2xl rounded-sm overflow-hidden border border-white/10 bg-black w-full aspect-video flex justify-center items-center">
+                            <div className="relative shadow-2xl rounded-sm overflow-hidden border border-white/10 bg-black h-full max-w-full aspect-video flex justify-center items-center">
                                 <Player
                                     ref={onPlayerRef}
                                     component={ResultVideo}
