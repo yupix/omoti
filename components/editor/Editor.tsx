@@ -355,16 +355,68 @@ export default function Editor() {
                                         </div>
                                         {/* Style Properties */}
                                         {(selectedClip.type === 'shape' || selectedClip.type === 'text') && (
-                                            <div className="space-y-1">
-                                                <Label className="text-[10px] uppercase text-muted-foreground">Color</Label>
-                                                <div className="flex gap-2">
-                                                    <Input
-                                                        type="color"
-                                                        value={(selectedClip.style?.backgroundColor as string) || (selectedClip.style?.color as string) || '#ffffff'}
-                                                        onChange={e => handleUpdateStyle(selectedClip.type === 'text' ? 'color' : 'backgroundColor', e.target.value)}
-                                                        className="w-10 h-8 p-1 cursor-pointer"
-                                                    />
+                                            <div className="space-y-3 pt-2 border-t border-border/50">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Color</Label>
+                                                    <div className="flex gap-2">
+                                                        <Input
+                                                            type="color"
+                                                            value={(selectedClip.style?.backgroundColor as string) || (selectedClip.style?.color as string) || '#ffffff'}
+                                                            onChange={e => handleUpdateStyle(selectedClip.type === 'text' ? 'color' : 'backgroundColor', e.target.value)}
+                                                            className="w-full h-8 p-1 cursor-pointer"
+                                                        />
+                                                    </div>
                                                 </div>
+
+                                                {selectedClip.type === 'text' && (
+                                                    <>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[10px] uppercase text-muted-foreground">Font Family</Label>
+                                                            <Select
+                                                                value={(selectedClip.style?.fontFamily as string) || 'sans-serif'}
+                                                                onValueChange={(val) => handleUpdateStyle('fontFamily', val)}
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs">
+                                                                    <SelectValue placeholder="Font" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="sans-serif">Sans Serif</SelectItem>
+                                                                    <SelectItem value="serif">Serif</SelectItem>
+                                                                    <SelectItem value="monospace">Monospace</SelectItem>
+                                                                    <SelectItem value="Inter">Inter</SelectItem>
+                                                                    <SelectItem value="Roboto">Roboto</SelectItem>
+                                                                    <SelectItem value="'Comic Sans MS'">Comic Sans</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[10px] uppercase text-muted-foreground">Font Size (px)</Label>
+                                                            <Input
+                                                                type="number"
+                                                                value={typeof selectedClip.style?.fontSize === 'string' ? parseInt(selectedClip.style.fontSize) : 80}
+                                                                onChange={e => handleUpdateStyle('fontSize', `${e.target.value}px`)}
+                                                                className="h-8 text-sm"
+                                                            />
+                                                        </div>
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[10px] uppercase text-muted-foreground">Font Weight</Label>
+                                                            <Select
+                                                                value={String(selectedClip.style?.fontWeight || 800)}
+                                                                onValueChange={(val) => handleUpdateStyle('fontWeight', parseInt(val))}
+                                                            >
+                                                                <SelectTrigger className="h-8 text-xs">
+                                                                    <SelectValue placeholder="Weight" />
+                                                                </SelectTrigger>
+                                                                <SelectContent>
+                                                                    <SelectItem value="400">Normal (400)</SelectItem>
+                                                                    <SelectItem value="600">Semi Bold (600)</SelectItem>
+                                                                    <SelectItem value="800">Bold (800)</SelectItem>
+                                                                    <SelectItem value="900">Black (900)</SelectItem>
+                                                                </SelectContent>
+                                                            </Select>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </CardContent>
