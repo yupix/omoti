@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile } from 'lucide-react';
+import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2 } from 'lucide-react';
 import { Clip, Track, ClipType } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -31,6 +31,7 @@ export default function Editor() {
 
     const [currentFrame, setCurrentFrame] = useState(0);
     const [isPlaying, setIsPlaying] = useState(false);
+    const [isExporting, setIsExporting] = useState(false);
     const [player, setPlayer] = useState<PlayerRef | null>(null);
 
     const totalFrames = 300; // 10 seconds at 30fps
@@ -129,6 +130,38 @@ export default function Editor() {
             // setIsPlaying(!isPlaying); // Let event listener handle state
         }
     }
+
+    const handleExport = async () => {
+        try {
+            setIsExporting(true);
+            const response = await fetch('/api/render', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ clips }),
+            });
+
+            if (!response.ok) {
+                const error = await response.json();
+                throw new Error(error.error || 'Export failed');
+            }
+
+            const data = await response.json();
+
+            // Trigger download
+            const link = document.createElement('a');
+            link.href = data.url;
+            link.download = 'video-export.mp4';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+        } catch (error) {
+            console.error(error);
+            alert('Export failed. Check console for details.');
+        } finally {
+            setIsExporting(false);
+        }
+    };
 
     return (
         <div className="flex flex-col h-screen w-full bg-background text-foreground overflow-hidden font-sans">
@@ -333,8 +366,14 @@ export default function Editor() {
                         <div className="text-sm text-muted-foreground">
                             Project: <span className="text-foreground font-medium">New Video 01</span>
                         </div>
-                        <Button className="h-8 shadow-[0_0_20px_rgba(109,40,217,0.3)]" size="sm">
-                            <Download className="mr-2 size-3" /> Export
+                        <Button
+                            className="h-8 shadow-[0_0_20px_rgba(109,40,217,0.3)] transition-all hover:shadow-[0_0_30px_rgba(109,40,217,0.5)]"
+                            size="sm"
+                            onClick={handleExport}
+                            disabled={isExporting}
+                        >
+                            {isExporting ? <Loader2 className="mr-2 size-3 animate-spin" /> : <Download className="mr-2 size-3" />}
+                            {isExporting ? 'Exporting...' : 'Export'}
                         </Button>
                     </header>
 
