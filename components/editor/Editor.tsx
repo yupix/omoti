@@ -12,6 +12,7 @@ import { Clip, Track, ClipType } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InteractOverlay } from './InteractOverlay';
+import { bundledLanguages } from 'shiki';
 
 const INITIAL_TRACKS: Track[] = [
     { id: 1, name: 'Overlay Text' },
@@ -111,6 +112,7 @@ export default function Editor() {
             title: `New ${contentOverride || type}`,
             style: type === 'shape' ? { backgroundColor: '#ffffff' } : {},
             animation: { type: 'fade', duration: 15 }, // Default animation
+            language: type === 'code' ? 'typescript' : undefined,
         };
         setClips([...clips, newClip]);
         setSelectedClipId(newClip.id);
@@ -340,11 +342,31 @@ export default function Editor() {
                                         <div className="space-y-1">
                                             <Label className="text-[10px] uppercase text-muted-foreground">Value</Label>
                                             {selectedClip.type === 'code' ? (
-                                                <textarea
-                                                    value={selectedClip.content}
-                                                    onChange={e => handleUpdateClip('content', e.target.value)}
-                                                    className="w-full h-24 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                                                />
+                                                <div className="space-y-2">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Language</Label>
+                                                        <Select
+                                                            value={selectedClip.language || 'typescript'}
+                                                            onValueChange={(val) => handleUpdateClip('language', val)}
+                                                        >
+                                                            <SelectTrigger className="h-8 text-xs">
+                                                                <SelectValue placeholder="Language" />
+                                                            </SelectTrigger>
+                                                            <SelectContent className="max-h-[300px]">
+                                                                {Object.keys(bundledLanguages).sort().map((lang) => (
+                                                                    <SelectItem key={lang} value={lang}>
+                                                                        {lang}
+                                                                    </SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <textarea
+                                                        value={selectedClip.content}
+                                                        onChange={e => handleUpdateClip('content', e.target.value)}
+                                                        className="w-full h-24 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                                                    />
+                                                </div>
                                             ) : (
                                                 <Input
                                                     value={selectedClip.content}

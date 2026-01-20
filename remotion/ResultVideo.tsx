@@ -1,6 +1,7 @@
 import { AbsoluteFill, Sequence, useCurrentFrame, Audio, interpolate, spring, useVideoConfig } from 'remotion';
 import React from 'react';
 import { Clip } from '../types';
+import { CodeHighlighter } from '../components/CodeHighlighter';
 
 interface RenderClipProps {
     clip: Clip;
@@ -69,17 +70,18 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
         return (
             <div style={positionStyle}>
                 <div style={{
-                    backgroundColor: '#1e1e1e',
-                    padding: '40px',
                     borderRadius: '16px',
-                    border: '1px solid #333',
+                    overflow: 'hidden',
                     boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
-                    minWidth: '300px', // ensure some width if scaling down
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    minWidth: '300px',
+                    fontSize: '24px',
+                    backgroundColor: '#1e1e1e', // Fallback/Basis
                     ...clip.style
                 }}>
-                    <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: '32px', color: '#d4d4d4', whiteSpace: 'pre-wrap' }}>
-                        <code>{clip.content}</code>
-                    </pre>
+                    <div style={{ padding: '30px' }}>
+                        <CodeHighlighter code={clip.content} language={clip.language || 'typescript'} theme="dark-plus" />
+                    </div>
                 </div>
             </div>
         )

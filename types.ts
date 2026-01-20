@@ -18,6 +18,7 @@ export interface Clip {
     y?: number; // Position Y (pixels)
     width?: number; // Width (pixels)
     height?: number; // Height (pixels)
+    language?: string; // Programming language for code clips
 }
 
 export interface Track {
