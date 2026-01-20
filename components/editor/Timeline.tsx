@@ -40,43 +40,99 @@ export const Timeline: React.FC<TimelineProps> = ({
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
-    const [dragState, setDragState] = useState<{ id: string; startX: number; startFrame: number; } | null>(null);
+    const [dragState, setDragState] = useState<{ id: string; offset: number } | null>(null);
+    const autoScrollSpeed = useRef(0);
+    const lastMouseMoveEvent = useRef<MouseEvent | null>(null);
 
-    // Global Mouse Handlers for Dragging
+    // Auto-scroll loop
     useEffect(() => {
         if (!dragState) return;
 
-        const handleMouseMove = (e: MouseEvent) => {
-            if (!containerRef.current || !contentRef.current) return;
+        let animationFrameId: number;
 
-            // 1. Calculate Frame Delta
-            const deltaX = e.clientX - dragState.startX;
-            const deltaFrames = Math.round(deltaX / FRAME_WIDTH);
-            const newStartFrame = Math.max(0, dragState.startFrame + deltaFrames);
+        const loop = () => {
+            if (autoScrollSpeed.current !== 0 && containerRef.current) {
+                containerRef.current.scrollLeft += autoScrollSpeed.current;
 
-            // 2. Calculate Track Drop (Vertical)
-            const containerRect = containerRef.current.getBoundingClientRect();
-            // e.clientY is relative to viewport.
-            // containerRect.top is the top of the scrollable container in viewport.
-            // containerRef.current.scrollTop is how much the container has scrolled.
-            // RULER_HEIGHT is the fixed height of the ruler at the top.
-            const relativeYInScrollableArea = e.clientY - containerRect.top + containerRef.current.scrollTop;
-            const trackIndex = Math.floor((relativeYInScrollableArea - RULER_HEIGHT) / TRACK_HEIGHT);
-
-            if (trackIndex >= 0 && trackIndex < tracks.length) {
-                const targetTrack = tracks[trackIndex];
-                onClipMove(dragState.id, newStartFrame, targetTrack.id);
-            } else {
-                // If outside valid track area, keep clip on its original track (or closest?)
-                // For now, keep visual feedback consistent with logic: update StartFrame but keep TrackId
-                const clip = clips.find(c => c.id === dragState.id);
-                if (clip) onClipMove(dragState.id, newStartFrame, clip.trackId);
+                // Trigger an update implicitly by re-processing the last mouse event
+                if (lastMouseMoveEvent.current) {
+                    processMouseMove(lastMouseMoveEvent.current);
+                }
             }
+            animationFrameId = requestAnimationFrame(loop);
         };
 
-        const handleMouseUp = () => {
-            setDragState(null);
-        };
+        animationFrameId = requestAnimationFrame(loop);
+        return () => cancelAnimationFrame(animationFrameId);
+        // eslint-disable-next-line react-hooks/exhaustive-deps
+    }, [dragState]); // Re-run when drag starts/stops
+
+    // Logic to calculate frame from mouse
+    const getFrameFromMouse = (e: MouseEvent) => {
+        if (!containerRef.current) return 0;
+        const rect = containerRef.current.getBoundingClientRect();
+        const scrollLeft = containerRef.current.scrollLeft;
+        const x = e.clientX - rect.left + scrollLeft - HEADER_WIDTH;
+        return Math.round(x / FRAME_WIDTH);
+    };
+
+    // Helper to process mouse move logic (extracted for use in auto-scroll loop)
+    const processMouseMove = (e: MouseEvent) => {
+        if (!dragState || !containerRef.current) return;
+
+        // Logic
+        const currentMouseFrame = getFrameFromMouse(e);
+        const newStartFrame = Math.max(0, currentMouseFrame - dragState.offset);
+
+        // Calculate vertical track drop
+        const rect = containerRef.current.getBoundingClientRect();
+        const relativeY = e.clientY - rect.top + containerRef.current.scrollTop;
+        const trackIndex = Math.floor((relativeY - RULER_HEIGHT) / TRACK_HEIGHT);
+
+        if (trackIndex >= 0 && trackIndex < tracks.length) {
+            const targetTrack = tracks[trackIndex];
+            onClipMove(dragState.id, newStartFrame, targetTrack.id);
+        } else {
+            const clip = clips.find(c => c.id === dragState.id);
+            if (clip) onClipMove(dragState.id, newStartFrame, clip.trackId);
+        }
+    }
+
+    const handleMouseMove = (e: MouseEvent) => {
+        if (!dragState || !containerRef.current) return;
+        lastMouseMoveEvent.current = e;
+
+        // Auto-scroll detection
+        const rect = containerRef.current.getBoundingClientRect();
+        const edgeThreshold = 50;
+        const maxSpeed = 15;
+
+        // Only auto-scroll if we are strictly within the vertical bounds of the timeline?
+        // Actually fine to scroll even if outside vertically, as long as dragging.
+        if (e.clientX > rect.right - edgeThreshold) {
+            // Right edge
+            const distance = Math.max(0, e.clientX - (rect.right - edgeThreshold));
+            autoScrollSpeed.current = Math.min(maxSpeed, (distance / edgeThreshold) * maxSpeed);
+        } else if (e.clientX < rect.left + edgeThreshold) {
+            // Left edge
+            const distance = Math.max(0, (rect.left + edgeThreshold) - e.clientX);
+            autoScrollSpeed.current = -Math.min(maxSpeed, (distance / edgeThreshold) * maxSpeed);
+        } else {
+            autoScrollSpeed.current = 0;
+        }
+
+        processMouseMove(e);
+    };
+
+    const handleMouseUp = () => {
+        setDragState(null);
+        autoScrollSpeed.current = 0;
+        lastMouseMoveEvent.current = null;
+    };
+
+    // Register Global Listeners
+    useEffect(() => {
+        if (!dragState) return;
 
         window.addEventListener('mousemove', handleMouseMove);
         window.addEventListener('mouseup', handleMouseUp);
@@ -85,8 +141,7 @@ export const Timeline: React.FC<TimelineProps> = ({
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [dragState, clips, onClipMove, tracks]);
-
+    }, [dragState, clips, onClipMove, tracks]); // Dependencies needed for processMouseMove closure
 
     const handleHeaderClick = (e: React.MouseEvent<HTMLDivElement>) => {
         const rect = e.currentTarget.getBoundingClientRect();
@@ -188,7 +243,16 @@ export const Timeline: React.FC<TimelineProps> = ({
                                             onMouseDown={(e) => {
                                                 e.stopPropagation();
                                                 onClipClick(clip.id);
-                                                setDragState({ id: clip.id, startX: e.clientX, startFrame: clip.startFrame });
+
+                                                // Calculate initial offset
+                                                if (containerRef.current) {
+                                                    const rect = containerRef.current.getBoundingClientRect();
+                                                    // x relative to start of timeline content (including scroll)
+                                                    const x = e.clientX - rect.left + containerRef.current.scrollLeft - HEADER_WIDTH;
+                                                    const mouseFrame = Math.round(x / FRAME_WIDTH);
+                                                    const offset = mouseFrame - clip.startFrame;
+                                                    setDragState({ id: clip.id, offset });
+                                                }
                                             }}
                                             onContextMenu={(e) => onContextMenu(e, clip.id)}
                                         >

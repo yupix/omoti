@@ -35,7 +35,9 @@ export default function Editor() {
     const [isExporting, setIsExporting] = useState(false);
     const [player, setPlayer] = useState<PlayerRef | null>(null);
 
-    const totalFrames = 300; // 10 seconds at 30fps
+    // Dynamic total frames based on content + buffer
+    const maxClipEnd = Math.max(0, ...clips.map(c => c.startFrame + c.durationInFrames));
+    const totalFrames = Math.max(300, maxClipEnd + 150); // Minimum 10s, or content + 5s buffer
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
 
