@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen } from 'lucide-react';
+import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy } from 'lucide-react';
 import { Clip, Track, ClipType } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -144,6 +144,40 @@ export default function Editor() {
         }));
     };
 
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
+
+    // Keyboard Shortcuts
+    useEffect(() => {
+        const handleKeyDown = (e: KeyboardEvent) => {
+            // Ignore if user is typing in an input
+            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+                return;
+            }
+
+            if (e.key === 'Delete' || e.key === 'Backspace') {
+                if (selectedClipId) {
+                    setClips(prev => prev.filter(c => c.id !== selectedClipId));
+                    setSelectedClipId(null);
+                }
+            }
+
+            if (e.key === 'Escape') {
+                setSelectedClipId(null);
+                setContextMenu(null);
+            }
+        };
+
+        window.addEventListener('keydown', handleKeyDown);
+        return () => window.removeEventListener('keydown', handleKeyDown);
+    }, [selectedClipId]);
+
+    // Close context menu on click
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, []);
+
     const handleAddTrack = () => {
         const newId = Math.max(...tracks.map(t => t.id), 0) + 1;
         setTracks([...tracks, { id: newId, name: `Track ${newId}` }]);
@@ -158,6 +192,25 @@ export default function Editor() {
             setTracks(tracks.filter(t => t.id !== id));
             setClips(clips.filter(c => c.trackId !== id));
         }
+    };
+
+    const handleClipContextMenu = (e: React.MouseEvent, clipId: string) => {
+        e.preventDefault();
+        setContextMenu({ x: e.clientX, y: e.clientY, clipId });
+        setSelectedClipId(clipId);
+    };
+
+    const handleDuplicateClip = (clipId: string) => {
+        const clip = clips.find(c => c.id === clipId);
+        if (!clip) return;
+
+        const newClip = {
+            ...clip,
+            id: Math.random().toString(36).substr(2, 9),
+            startFrame: clip.startFrame + clip.durationInFrames, // Place right after
+            title: `${clip.title} (Copy)`
+        };
+        setClips([...clips, newClip]);
     };
 
     const handleSaveProject = () => {
@@ -522,10 +575,43 @@ export default function Editor() {
                     onAddTrack={handleAddTrack}
                     onUpdateTrackName={handleTrackNameChange}
                     onRemoveTrack={handleRemoveTrack}
+                    onContextMenu={handleClipContextMenu}
                     selectedClipId={selectedClipId}
                     totalFrames={totalFrames}
                 />
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    className="fixed z-50 min-w-32 bg-popover border border-border shadow-md rounded-md overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                >
+                    <div className="p-1 flex flex-col gap-0.5">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start h-8 px-2"
+                            onClick={() => handleDuplicateClip(contextMenu.clipId)}
+                        >
+                            <Copy size={14} className="mr-2" />
+                            Duplicate
+                        </Button>
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start h-8 px-2 text-destructive hover:text-destructive"
+                            onClick={() => {
+                                setClips(clips.filter(c => c.id !== contextMenu.clipId));
+                                setContextMenu(null);
+                            }}
+                        >
+                            <Trash2 size={14} className="mr-2" />
+                            Delete
+                        </Button>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

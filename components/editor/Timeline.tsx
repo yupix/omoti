@@ -14,6 +14,7 @@ interface TimelineProps {
     onAddTrack: () => void;
     onUpdateTrackName: (id: number, newName: string) => void;
     onRemoveTrack: (id: number) => void;
+    onContextMenu: (e: React.MouseEvent, clipId: string) => void;
     selectedClipId: string | null;
     totalFrames: number;
 }
@@ -33,6 +34,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     onAddTrack,
     onUpdateTrackName,
     onRemoveTrack,
+    onContextMenu,
     selectedClipId,
     totalFrames,
 }) => {
@@ -188,6 +190,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                 onClipClick(clip.id);
                                                 setDragState({ id: clip.id, startX: e.clientX, startFrame: clip.startFrame });
                                             }}
+                                            onContextMenu={(e) => onContextMenu(e, clip.id)}
                                         >
                                             {clip.title || clip.content}
                                         </div>
