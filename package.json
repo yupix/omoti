@@ -11,7 +11,9 @@
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.2",
     "@radix-ui/react-select": "^2.2.6",
+    "@remotion/bundler": "^4.0.407",
     "@remotion/player": "^4.0.407",
+    "@remotion/renderer": "^4.0.407",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "framer-motion": "^12.27.1",
