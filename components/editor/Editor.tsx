@@ -25,7 +25,7 @@ const INITIAL_CLIPS: Clip[] = [
 
 export default function Editor() {
     const [primaryColor, setPrimaryColor] = useState('#6d28d9');
-    const [tracks] = useState<Track[]>(INITIAL_TRACKS); // Static tracks for now
+    const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS); // Static tracks for now
     const [clips, setClips] = useState<Clip[]>(INITIAL_CLIPS);
     const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 
@@ -142,6 +142,15 @@ export default function Editor() {
             }
             return c;
         }));
+    };
+
+    const handleAddTrack = () => {
+        const newId = Math.max(...tracks.map(t => t.id), 0) + 1;
+        setTracks([...tracks, { id: newId, name: `Track ${newId}` }]);
+    };
+
+    const handleTrackNameChange = (id: number, newName: string) => {
+        setTracks(tracks.map(t => t.id === id ? { ...t, name: newName } : t));
     };
 
     const handleExport = async () => {
@@ -446,6 +455,8 @@ export default function Editor() {
                     onSeek={handleSeek}
                     onClipClick={id => setSelectedClipId(id)}
                     onClipMove={handleClipMove}
+                    onAddTrack={handleAddTrack}
+                    onUpdateTrackName={handleTrackNameChange}
                     selectedClipId={selectedClipId}
                     totalFrames={totalFrames}
                 />
