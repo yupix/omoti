@@ -13,8 +13,9 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     const containerRef = useRef<HTMLDivElement>(null);
     const [isDragging, setIsDragging] = useState(false);
     const [isResizing, setIsResizing] = useState(false);
+    const [isRotating, setIsRotating] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-    const [initialClipState, setInitialClipState] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+    const [initialClipState, setInitialClipState] = useState<{ x: number, y: number, w: number, h: number, r: number } | null>(null);
     const [snapLines, setSnapLines] = useState<{ x: boolean, y: boolean }>({ x: false, y: false });
 
     // Safe access to clip properties for hooks/logic
@@ -22,21 +23,23 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     const y = clip?.y ?? 0;
     const w = clip?.width ?? (clip?.x === undefined ? compWidth : 400);
     const h = clip?.height ?? (clip?.x === undefined ? compHeight : 400);
+    const r = clip?.rotate ?? 0;
 
-    const handleMouseDown = (e: React.MouseEvent, mode: 'move' | 'resize') => {
+    const handleMouseDown = (e: React.MouseEvent, mode: 'move' | 'resize' | 'rotate') => {
         if (!clip) return; // Ensure clip exists before interaction
         e.preventDefault();
         e.stopPropagation();
 
         if (mode === 'move') setIsDragging(true);
         if (mode === 'resize') setIsResizing(true);
+        if (mode === 'rotate') setIsRotating(true);
 
         setStartPos({ x: e.clientX, y: e.clientY });
-        setInitialClipState({ x, y, w, h });
+        setInitialClipState({ x, y, w, h, r });
     };
 
     useEffect(() => {
-        if (!isDragging && !isResizing) return;
+        if (!isDragging && !isResizing && !isRotating) return;
 
         const handleMouseMove = (e: MouseEvent) => {
             if (!containerRef.current || !initialClipState) return;
@@ -82,27 +85,77 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
             }
 
             if (isResizing) {
+                // Project screen delta to local rotated space
+                // Angle in radians (negative because Y is down in screen? No, standard rotation matrix)
+                // Screen coord to Local: Rotate by -theta.
+                // Theta is initialClipState.r (degrees).
+                const theta = initialClipState.r * (Math.PI / 180);
+                const cos = Math.cos(theta);
+                const sin = Math.sin(theta);
+
+                // standard 2d rotation
+                const localDx = dx * cos + dy * sin;
+                const localDy = -dx * sin + dy * cos;
+
                 // Determine new dimensions
-                let newW = Math.max(10, initialClipState.w + dx);
-                let newH = Math.max(10, initialClipState.h + dy);
+                let newW = Math.max(10, initialClipState.w + localDx);
+                let newH = Math.max(10, initialClipState.h + localDy);
 
                 if (e.shiftKey) {
                     const ratio = initialClipState.w / initialClipState.h;
                     // Keep aspect ratio
-                    if (Math.abs(dx) > Math.abs(dy)) {
+                    if (Math.abs(localDx) > Math.abs(localDy)) {
                         newH = newW / ratio;
                     } else {
                         newW = newH * ratio;
                     }
                 }
 
+                // We assume top-left anchor is fixed for now?
+                // Rotating resize is tricky. If we just change W/H, it expands from CENTER if using transform-origin center?
+                // Visual box is `transformOrigin: center`.
+                // If I increase width, the box grows left AND right from center.
+                // But dragging bottom-right corner usually implies Top-Left is anchored.
+                // To achieve Corner Resize behavior with Center Keypoint:
+                // We must Adjust Center (x, y) as well as Width/Height.
+
+                // For simplicity MVP: Let it grow from center?
+                // "Resize Handle (Bottom Right)". 
+                // If I drag BR away, box grows.
+                // If it grows from center, BR moves out, TL moves out.
+                // The mouse cursor stays at BR.
+                // So "Grow from Center" actually aligns well with "Drag BR away"?
+                // Yes, if we consider `localDx` as full DeltaW (triggered by edge drag)?
+                // No, `localDx` is Center-to-Mouse delta change? No, startPos is mouse.
+                // It works for center-based scaling fairly intuitively if we mimic scaling.
+
                 onUpdate({ width: Math.round(newW), height: Math.round(newH) });
+            }
+
+            if (isRotating) {
+                const rect = containerRef.current.getBoundingClientRect();
+                const scaleX = compWidth / rect.width;
+                const scaleY = compHeight / rect.height;
+
+                // Calculate angle relative to center
+                const screenCX = rect.left + rect.width * ((initialClipState.x + initialClipState.w / 2) / compWidth);
+                const screenCY = rect.top + rect.height * ((initialClipState.y + initialClipState.h / 2) / compHeight);
+
+                const angleRad = Math.atan2(e.clientY - screenCY, e.clientX - screenCX);
+                let angleDeg = (angleRad * 180 / Math.PI) + 90; // +90 because handle is at top (-90)
+
+                if (e.shiftKey) {
+                    angleDeg = Math.round(angleDeg / 15) * 15;
+                }
+
+                onUpdate({ rotate: Math.round(angleDeg) });
             }
         };
 
         const handleMouseUp = () => {
             setIsDragging(false);
             setIsResizing(false);
+            setIsRotating(false);
             setInitialClipState(null);
             setSnapLines({ x: false, y: false });
         };
@@ -114,7 +167,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
             window.removeEventListener('mousemove', handleMouseMove);
             window.removeEventListener('mouseup', handleMouseUp);
         };
-    }, [isDragging, isResizing, startPos, initialClipState, compWidth, compHeight, onUpdate]);
+    }, [isDragging, isResizing, isRotating, startPos, initialClipState, compWidth, compHeight, onUpdate]);
 
     if (!clip) return null;
 
@@ -134,7 +187,9 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
         zIndex: 50,
         display: 'flex',
         alignItems: 'flex-start',
-        justifyContent: 'flex-start'
+        justifyContent: 'flex-start',
+        transform: `rotate(${r}deg)`,
+        transformOrigin: 'center center' // Match ResultVideo
     };
 
     return (
@@ -149,6 +204,16 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
 
             {/* The Gizmo Box */}
             <div style={style} onMouseDown={(e) => handleMouseDown(e, 'move')}>
+
+                {/* Rotate Handle (Top Center Stick) */}
+                <div
+                    className="absolute -top-6 left-1/2 -ml-[1px] h-6 w-0.5 bg-blue-500 z-50 flex flex-col items-center justify-start group"
+                >
+                    <div
+                        className="w-3 h-3 bg-white border-2 border-blue-500 rounded-full cursor-grab active:cursor-grabbing shadow-sm"
+                        onMouseDown={(e) => handleMouseDown(e, 'rotate')}
+                    />
+                </div>
 
                 {/* Drag Handle (Invisible full area, but cursor indicates) */}
                 <div className="absolute inset-0 cursor-move hover:bg-blue-500/10 transition-colors" />

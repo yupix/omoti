@@ -48,25 +48,32 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
 
     // Calculate Animation Styles
     // Calculate Animation Styles
-    let animationStyle: React.CSSProperties = { opacity: 1, transform: 'scale(1)' };
+    // Calculate Animation Styles
+    let opacity = 1;
+    let transformString = `rotate(${clip.rotate || 0}deg)`;
 
     if (clip.animation?.type === 'fade') {
         const animDuration = Math.max(1, clip.animation.duration || 10);
         const fadeIn = interpolate(frame, [0, animDuration], [0, 1], { extrapolateRight: 'clamp' });
         const fadeOut = interpolate(frame, [Math.max(animDuration, clip.durationInFrames - animDuration), clip.durationInFrames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-        animationStyle.opacity = fadeIn * fadeOut;
+        opacity = fadeIn * fadeOut;
+        transformString += ' scale(1)';
     } else if (clip.animation?.type === 'pop') {
         const scale = spring({
             fps,
             frame,
             config: { damping: 10 }
         });
-        animationStyle.transform = `scale(${scale})`;
+        transformString += ` scale(${scale})`;
     } else if (clip.animation?.type === 'slide') {
         const slideY = interpolate(frame, [0, 20], [100, 0], { extrapolateRight: 'clamp', easing: (t) => t * (2 - t) }); // Slide up
-        animationStyle.transform = `translateY(${slideY}%)`;
-        animationStyle.opacity = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: 'clamp' });
+        transformString += ` translateY(${slideY}%)`;
+        opacity = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: 'clamp' });
+    } else {
+        transformString += ' scale(1)';
     }
+
+    const animationStyle: React.CSSProperties = { opacity, transform: transformString };
 
     // Base positioning style
     const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
