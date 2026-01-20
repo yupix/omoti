@@ -19,6 +19,12 @@ export interface Clip {
     width?: number; // Width (pixels)
     height?: number; // Height (pixels)
     language?: string; // Programming language for code clips
+    steps?: CodeStep[]; // Keyframes for code content
+}
+
+export interface CodeStep {
+    code: string;
+    frameOffset: number;
 }
 
 export interface Track {

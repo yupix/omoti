@@ -11,6 +11,7 @@ interface TimelineProps {
     onSeek: (frame: number) => void;
     onClipClick: (clipId: string) => void;
     onClipMove: (clipId: string, newStartFrame: number, newTrackId: number) => void;
+    onClipResize?: (clipId: string, newStartFrame: number, newDuration: number) => void;
     onAddTrack: () => void;
     onUpdateTrackName: (id: number, newName: string) => void;
     onRemoveTrack: (id: number) => void;
@@ -23,6 +24,13 @@ const FRAME_WIDTH = 2; // px per frame
 const TRACK_HEIGHT = 48; // px
 const HEADER_WIDTH = 192; // w-48 = 192px
 const RULER_HEIGHT = 32; // px
+const RESIZE_HANDLE_WIDTH = 6; // px
+
+enum DragType {
+    MOVE,
+    RESIZE_LEFT,
+    RESIZE_RIGHT
+}
 
 export const Timeline: React.FC<TimelineProps> = ({
     tracks,
@@ -35,12 +43,13 @@ export const Timeline: React.FC<TimelineProps> = ({
     onUpdateTrackName,
     onRemoveTrack,
     onContextMenu,
+    onClipResize,
     selectedClipId,
     totalFrames,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
-    const [dragState, setDragState] = useState<{ id: string; offset: number } | null>(null);
+    const [dragState, setDragState] = useState<{ id: string; type: DragType; offset: number; initialStart: number; initialDuration: number } | null>(null);
     const autoScrollSpeed = useRef(0);
     const lastMouseMoveEvent = useRef<MouseEvent | null>(null);
 
@@ -80,21 +89,48 @@ export const Timeline: React.FC<TimelineProps> = ({
     const processMouseMove = (e: MouseEvent) => {
         if (!dragState || !containerRef.current) return;
 
-        // Logic
         const currentMouseFrame = getFrameFromMouse(e);
-        const newStartFrame = Math.max(0, currentMouseFrame - dragState.offset);
+        const clip = clips.find(c => c.id === dragState.id);
+        if (!clip) return;
 
-        // Calculate vertical track drop
-        const rect = containerRef.current.getBoundingClientRect();
-        const relativeY = e.clientY - rect.top + containerRef.current.scrollTop;
-        const trackIndex = Math.floor((relativeY - RULER_HEIGHT) / TRACK_HEIGHT);
+        if (dragState.type === DragType.MOVE) {
+            const newStartFrame = Math.max(0, currentMouseFrame - dragState.offset);
 
-        if (trackIndex >= 0 && trackIndex < tracks.length) {
-            const targetTrack = tracks[trackIndex];
-            onClipMove(dragState.id, newStartFrame, targetTrack.id);
-        } else {
-            const clip = clips.find(c => c.id === dragState.id);
-            if (clip) onClipMove(dragState.id, newStartFrame, clip.trackId);
+            // Calculate vertical track drop
+            const rect = containerRef.current.getBoundingClientRect();
+            const relativeY = e.clientY - rect.top + containerRef.current.scrollTop;
+            const trackIndex = Math.floor((relativeY - RULER_HEIGHT) / TRACK_HEIGHT);
+
+            if (trackIndex >= 0 && trackIndex < tracks.length) {
+                const targetTrack = tracks[trackIndex];
+                onClipMove(dragState.id, newStartFrame, targetTrack.id);
+            } else {
+                onClipMove(dragState.id, newStartFrame, clip.trackId);
+            }
+        } else if (dragState.type === DragType.RESIZE_LEFT) {
+            // Changing startFrame, keeping end time fixed? Or just pushing start?
+            // Typically resize left means end time stays same, start time moves.
+            // Duration = OriginalEnd - NewStart.
+            // But we need to calculate delta from initial mouse.
+            const totalDeltaFrames = currentMouseFrame - dragState.offset; // offset is initial mouse frame
+            // Actually, simplest is:
+            // NewStart = MouseFrame - (InitialMouse - InitialStart) ? 
+            // Let's use simpler logic: 
+            // We know valid frame at mouse position.
+            // We want the new start to be roughly currentMouseFrame.
+            // But we need to respect the offset within the handle?
+            // Let's assume user grabbed the exact edge.
+
+            let newStart = Math.min(clip.startFrame + clip.durationInFrames - 1, currentMouseFrame);
+            newStart = Math.max(0, newStart);
+            const newDur = (clip.startFrame + clip.durationInFrames) - newStart;
+
+            if (onClipResize) onClipResize(clip.id, newStart, newDur);
+        } else if (dragState.type === DragType.RESIZE_RIGHT) {
+            let newEnd = Math.max(clip.startFrame + 1, currentMouseFrame);
+            const newDur = newEnd - clip.startFrame;
+
+            if (onClipResize) onClipResize(clip.id, clip.startFrame, newDur);
         }
     }
 
@@ -251,12 +287,62 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                     const x = e.clientX - rect.left + containerRef.current.scrollLeft - HEADER_WIDTH;
                                                     const mouseFrame = Math.round(x / FRAME_WIDTH);
                                                     const offset = mouseFrame - clip.startFrame;
-                                                    setDragState({ id: clip.id, offset });
+                                                    setDragState({
+                                                        id: clip.id,
+                                                        type: DragType.MOVE,
+                                                        offset, // Offset from start frame
+                                                        initialStart: clip.startFrame,
+                                                        initialDuration: clip.durationInFrames
+                                                    });
                                                 }
                                             }}
                                             onContextMenu={(e) => onContextMenu(e, clip.id)}
                                         >
-                                            {clip.title || clip.content}
+                                            {/* Left Resize Handle */}
+                                            <div
+                                                className="absolute left-0 top-0 bottom-0 w-2 cursor-w-resize hover:bg-white/50 z-20"
+                                                onMouseDown={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    // Start Resize Left
+                                                    if (containerRef.current) {
+                                                        const rect = containerRef.current.getBoundingClientRect();
+                                                        const x = e.clientX - rect.left + containerRef.current.scrollLeft - HEADER_WIDTH;
+                                                        const mouseFrame = Math.round(x / FRAME_WIDTH);
+                                                        setDragState({
+                                                            id: clip.id,
+                                                            type: DragType.RESIZE_LEFT,
+                                                            offset: mouseFrame, // Store initial mouse frame
+                                                            initialStart: clip.startFrame,
+                                                            initialDuration: clip.durationInFrames
+                                                        });
+                                                    }
+                                                }}
+                                            />
+                                            <div className="flex-1 truncate px-2 pointer-events-none">
+                                                {clip.title || clip.content}
+                                            </div>
+                                            {/* Right Resize Handle */}
+                                            <div
+                                                className="absolute right-0 top-0 bottom-0 w-2 cursor-e-resize hover:bg-white/50 z-20"
+                                                onMouseDown={(e) => {
+                                                    e.stopPropagation();
+                                                    e.preventDefault();
+                                                    // Start Resize Right
+                                                    if (containerRef.current) {
+                                                        const rect = containerRef.current.getBoundingClientRect();
+                                                        const x = e.clientX - rect.left + containerRef.current.scrollLeft - HEADER_WIDTH;
+                                                        const mouseFrame = Math.round(x / FRAME_WIDTH);
+                                                        setDragState({
+                                                            id: clip.id,
+                                                            type: DragType.RESIZE_RIGHT,
+                                                            offset: mouseFrame,
+                                                            initialStart: clip.startFrame,
+                                                            initialDuration: clip.durationInFrames
+                                                        });
+                                                    }
+                                                }}
+                                            />
                                         </div>
                                     ))}
                                 </div>

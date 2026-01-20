@@ -7,8 +7,8 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy } from 'lucide-react';
-import { Clip, Track, ClipType } from '@/types';
+import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock } from 'lucide-react';
+import { Clip, Track, ClipType, CodeStep } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InteractOverlay } from './InteractOverlay';
@@ -102,6 +102,10 @@ export default function Editor() {
             trackId: type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2,
             startFrame: currentFrame, // Place at playhead
             durationInFrames: 60,
+            width: type === 'code' ? 600 : undefined,
+            height: type === 'code' ? 400 : undefined,
+            x: type === 'code' ? 340 : undefined,
+            y: type === 'code' ? 160 : undefined,
             content: contentOverride || (
                 type === 'text' ? 'New Text' :
                     type === 'audio' ? 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' :
@@ -113,6 +117,7 @@ export default function Editor() {
             style: type === 'shape' ? { backgroundColor: '#ffffff' } : {},
             animation: { type: 'fade', duration: 15 }, // Default animation
             language: type === 'code' ? 'typescript' : undefined,
+            steps: type === 'code' ? [{ code: 'console.log("Hello World");', frameOffset: 0 }] : undefined,
         };
         setClips([...clips, newClip]);
         setSelectedClipId(newClip.id);
@@ -361,11 +366,85 @@ export default function Editor() {
                                                             </SelectContent>
                                                         </Select>
                                                     </div>
-                                                    <textarea
-                                                        value={selectedClip.content}
-                                                        onChange={e => handleUpdateClip('content', e.target.value)}
-                                                        className="w-full h-24 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                                                    />
+                                                    <div className="space-y-4">
+                                                        <div className="flex items-center justify-between">
+                                                            <Label className="text-[10px] uppercase text-muted-foreground">Steps (Keyframes)</Label>
+                                                            <Button
+                                                                size="sm" variant="ghost" className="h-5 px-2 text-[10px]"
+                                                                onClick={() => {
+                                                                    const steps = selectedClip.steps || [];
+                                                                    const lastStep = steps[steps.length - 1];
+                                                                    const newStep: CodeStep = {
+                                                                        code: lastStep ? lastStep.code : '',
+                                                                        frameOffset: lastStep ? lastStep.frameOffset + 30 : 0
+                                                                    };
+                                                                    handleUpdateClip('steps', [...steps, newStep]);
+                                                                }}
+                                                            >
+                                                                <Plus size={10} className="mr-1" /> Add Step
+                                                            </Button>
+                                                        </div>
+
+                                                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                                            {(selectedClip.steps || [{ code: selectedClip.content, frameOffset: 0 }]).map((step, index) => (
+                                                                <div key={index} className="space-y-2 p-2 rounded-md border border-border bg-background/50 relative group">
+                                                                    <div className="flex items-start gap-2 mb-1">
+                                                                        <div className="flex-1 space-y-1">
+                                                                            <div className="flex justify-between items-center">
+                                                                                <Label className="text-[9px] uppercase text-muted-foreground">Transition Time (Relative)</Label>
+                                                                                <span className="text-[9px] font-mono text-muted-foreground bg-primary/10 px-1 rounded">
+                                                                                    Global: {selectedClip.startFrame + step.frameOffset}f
+                                                                                </span>
+                                                                            </div>
+                                                                            <div className="flex gap-1">
+                                                                                <Input
+                                                                                    type="number"
+                                                                                    className="h-7 text-xs"
+                                                                                    value={step.frameOffset}
+                                                                                    onChange={(e) => {
+                                                                                        const newSteps = [...(selectedClip.steps || [])];
+                                                                                        newSteps[index] = { ...step, frameOffset: Number(e.target.value) };
+                                                                                        handleUpdateClip('steps', newSteps);
+                                                                                    }}
+                                                                                />
+                                                                                <Button
+                                                                                    size="icon" variant="outline" className="h-7 w-7 flex-shrink-0"
+                                                                                    title="Set to Current Playhead"
+                                                                                    onClick={() => {
+                                                                                        const newOffset = Math.max(0, currentFrame - selectedClip.startFrame);
+                                                                                        const newSteps = [...(selectedClip.steps || [])];
+                                                                                        newSteps[index] = { ...step, frameOffset: newOffset };
+                                                                                        handleUpdateClip('steps', newSteps);
+                                                                                    }}
+                                                                                >
+                                                                                    <Clock size={12} />
+                                                                                </Button>
+                                                                            </div>
+                                                                        </div>
+                                                                        <Button
+                                                                            size="icon" variant="ghost" className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity mt-5"
+                                                                            onClick={() => {
+                                                                                const newSteps = (selectedClip.steps || []).filter((_, i) => i !== index);
+                                                                                handleUpdateClip('steps', newSteps);
+                                                                            }}
+                                                                            disabled={(selectedClip.steps || []).length <= 1}
+                                                                        >
+                                                                            <Trash2 size={12} />
+                                                                        </Button>
+                                                                    </div>
+                                                                    <textarea
+                                                                        value={step.code}
+                                                                        onChange={e => {
+                                                                            const newSteps = [...(selectedClip.steps || [])];
+                                                                            newSteps[index] = { ...step, code: e.target.value };
+                                                                            handleUpdateClip('steps', newSteps);
+                                                                        }}
+                                                                        className="w-full h-20 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                                                                    />
+                                                                </div>
+                                                            ))}
+                                                        </div>
+                                                    </div>
                                                 </div>
                                             ) : (
                                                 <Input
@@ -660,6 +739,9 @@ export default function Editor() {
                     onSeek={handleSeek}
                     onClipClick={id => setSelectedClipId(id)}
                     onClipMove={handleClipMove}
+                    onClipResize={(clipId, start, duration) => {
+                        setClips(clips.map(c => (c.id === clipId ? { ...c, startFrame: start, durationInFrames: duration } : c)));
+                    }}
                     onAddTrack={handleAddTrack}
                     onUpdateTrackName={handleTrackNameChange}
                     onRemoveTrack={handleRemoveTrack}

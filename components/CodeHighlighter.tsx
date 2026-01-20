@@ -1,5 +1,7 @@
 import React, { useEffect, useState } from 'react';
-import { codeToHtml } from 'shiki';
+import { createHighlighter, type Highlighter } from 'shiki';
+import { ShikiMagicMove } from 'shiki-magic-move/react';
+import 'shiki-magic-move/dist/style.css';
 import { continueRender, delayRender } from 'remotion';
 
 interface CodeHighlighterProps {
@@ -8,65 +10,95 @@ interface CodeHighlighterProps {
     theme?: string;
 }
 
+// Singleton to avoid re-creating the highlighter which is expensive
+let highlighterInstance: Highlighter | null = null;
+let highlighterPromise: Promise<Highlighter> | null = null;
+
 export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
     code,
-    language = 'javascript',
+    language = 'typescript',
     theme = 'dark-plus'
 }) => {
-    const [html, setHtml] = useState<string>('');
-    const [handle] = useState(() => delayRender('Highlight Code'));
+    // Always initialize to null to ensure hydration matches server (which should be null)
+    const [highlighter, setHighlighter] = useState<Highlighter | null>(null);
+    // Use a ref to track if we've already handled the delayRender
+    const handleRef = React.useRef<number | null>(null);
 
+    // Initialize/Load
     useEffect(() => {
+        // If we have an instance already, set it immediately to avoid visual lag if possible, 
+        // but strictly this runs after mount so hydration is safe.
+        if (highlighterInstance && !highlighter) {
+            setHighlighter(highlighterInstance);
+        }
+
+        if (handleRef.current === null) {
+            handleRef.current = delayRender('Highlight Code Load');
+        }
+
         let mounted = true;
-        const highlight = async () => {
+
+        const load = async () => {
             try {
-                // Determine language or fallback
-                const lang = language || 'javascript';
-                const out = await codeToHtml(code, {
-                    lang: lang,
-                    themes: {
-                        light: 'github-light',
-                        dark: theme
-                    },
-                    defaultColor: 'dark'
-                });
+                if (!highlighterPromise) {
+                    highlighterPromise = createHighlighter({
+                        themes: ['dark-plus', theme as any],
+                        langs: ['javascript', 'typescript', language as any],
+                    });
+                }
+
+                const h = await highlighterPromise;
+                highlighterInstance = h;
+
+                // Ensure resource is loaded
+                const promises = [];
+                if (!h.getLoadedLanguages().includes(language as any)) {
+                    promises.push(h.loadLanguage(language as any));
+                }
+                if (!h.getLoadedThemes().includes(theme as any)) {
+                    promises.push(h.loadTheme(theme as any));
+                }
+
+                if (promises.length > 0) {
+                    await Promise.all(promises);
+                }
 
                 if (mounted) {
-                    setHtml(out);
-                    continueRender(handle);
+                    setHighlighter(h);
+                    if (handleRef.current !== null) {
+                        continueRender(handleRef.current);
+                        handleRef.current = null;
+                    }
                 }
-            } catch (e) {
-                console.error("Shiki Highlight Error:", e);
-                // On error, resolve anyway so video doesn't hang
-                if (mounted) {
-                    continueRender(handle);
+            } catch (err) {
+                console.error("Failed to load highlighter", err);
+                if (handleRef.current !== null) {
+                    continueRender(handleRef.current);
+                    handleRef.current = null;
                 }
             }
         };
 
-        highlight();
+        load();
 
         return () => {
             mounted = false;
         };
-    }, [code, language, theme, handle]);
+    }, [language, theme]);
 
-    // If highlighting hasn't finished, show raw code.
-    // Ideally we want to wait, but for preview/Remotion validation, delayRender handles the waiting.
-    // However, during initial load, we might see a flash if we don't return null or something.
-    // But since we use delayRender, Remotion player will wait until we call continueRender.
-    if (!html) {
-        return <pre style={{ opacity: 0 }}>{code}</pre>;
+    if (!highlighter) {
+        // Render a placeholder with the raw code to reduce layout shift/flash, but hidden?
+        // Or just null. Null is safer for hydration if we assume server renders null.
+        return <pre className="opacity-0">{code}</pre>;
     }
 
     return (
-        <div
-            dangerouslySetInnerHTML={{ __html: html }}
-            style={{
-                textAlign: 'left',
-                whiteSpace: 'pre-wrap',
-                fontFamily: 'monospace'
-            }}
+        <ShikiMagicMove
+            lang={language as any}
+            theme={theme as any}
+            highlighter={highlighter}
+            code={code}
+            options={{ duration: 800, stagger: 0.3, lineNumbers: false }}
         />
     );
 };

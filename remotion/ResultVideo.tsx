@@ -3,6 +3,41 @@ import React from 'react';
 import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
 
+const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
+    const frame = useCurrentFrame();
+
+    let displayCode = clip.content;
+
+    // Logic to determine which step is active
+    if (clip.steps && clip.steps.length > 0) {
+        const localFrame = frame - clip.startFrame;
+        // Find the last step that has frameOffset <= localFrame
+        const activeStep = [...clip.steps]
+            .sort((a, b) => a.frameOffset - b.frameOffset)
+            .reverse() // check from latest
+            .find(step => step.frameOffset <= localFrame);
+
+        if (activeStep) {
+            displayCode = activeStep.code;
+        } else {
+            // If before first step, maybe show first step or empty?
+            // Let's show the first step if we are before it, or just empty?
+            // Usually steps start at 0. If not, showing nothing or clip.content is safe.
+            // If we have steps, we probably want to prioritize them.
+            const firstStep = clip.steps.sort((a, b) => a.frameOffset - b.frameOffset)[0];
+            if (firstStep) displayCode = firstStep.code;
+        }
+    }
+
+    return (
+        <CodeHighlighter
+            code={displayCode}
+            language={clip.language || 'typescript'}
+            theme="dark-plus"
+        />
+    );
+};
+
 interface RenderClipProps {
     clip: Clip;
 }
@@ -16,9 +51,9 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     let animationStyle: React.CSSProperties = { opacity: 1, transform: 'scale(1)' };
 
     if (clip.animation?.type === 'fade') {
-        const animDuration = clip.animation.duration || 10;
+        const animDuration = Math.max(1, clip.animation.duration || 10);
         const fadeIn = interpolate(frame, [0, animDuration], [0, 1], { extrapolateRight: 'clamp' });
-        const fadeOut = interpolate(frame, [clip.durationInFrames - animDuration, clip.durationInFrames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
+        const fadeOut = interpolate(frame, [Math.max(animDuration, clip.durationInFrames - animDuration), clip.durationInFrames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
         animationStyle.opacity = fadeIn * fadeOut;
     } else if (clip.animation?.type === 'pop') {
         const scale = spring({
@@ -75,12 +110,17 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                     boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     minWidth: '300px',
+                    width: '100%', // Fill the container
+                    height: '100%', // Fill the container
                     fontSize: '24px',
                     backgroundColor: '#1e1e1e', // Fallback/Basis
+                    display: 'flex', // Ensure content alignment
+                    alignItems: 'center', // Vertically center content? Or top? Usually code is top. Let's start with default/stretch.
+                    // Actually, if height is 100%, we probably want the inner padding div to just flow.
                     ...clip.style
                 }}>
-                    <div style={{ padding: '30px' }}>
-                        <CodeHighlighter code={clip.content} language={clip.language || 'typescript'} theme="dark-plus" />
+                    <div style={{ padding: '30px', width: '100%' }}>
+                        <CodeClipRenderer clip={clip} />
                     </div>
                 </div>
             </div>
