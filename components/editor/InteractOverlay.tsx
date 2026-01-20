@@ -83,8 +83,18 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
 
             if (isResizing) {
                 // Determine new dimensions
-                const newW = Math.max(10, initialClipState.w + dx);
-                const newH = Math.max(10, initialClipState.h + dy);
+                let newW = Math.max(10, initialClipState.w + dx);
+                let newH = Math.max(10, initialClipState.h + dy);
+
+                if (e.shiftKey) {
+                    const ratio = initialClipState.w / initialClipState.h;
+                    // Keep aspect ratio
+                    if (Math.abs(dx) > Math.abs(dy)) {
+                        newH = newW / ratio;
+                    } else {
+                        newW = newH * ratio;
+                    }
+                }
 
                 onUpdate({ width: Math.round(newW), height: Math.round(newH) });
             }
