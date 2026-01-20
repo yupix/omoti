@@ -1,4 +1,5 @@
-export type ClipType = 'text' | 'image' | 'video';
+export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code';
+
 
 export interface Clip {
     id: string;
@@ -9,6 +10,10 @@ export interface Clip {
     content: string; // Text content or Image/Video URL
     style?: React.CSSProperties; // Simple styling for now
     title?: string; // For display in timeline
+    animation?: {
+        type: 'fade' | 'pop' | 'slide' | 'none';
+        duration: number; // in frames
+    };
 }
 
 export interface Track {
