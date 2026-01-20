@@ -131,6 +131,19 @@ export default function Editor() {
         }
     }
 
+    const handleClipMove = (clipId: string, newStartFrame: number, newTrackId: number) => {
+        setClips(clips.map(c => {
+            if (c.id === clipId) {
+                return {
+                    ...c,
+                    startFrame: Math.max(0, newStartFrame),
+                    trackId: newTrackId
+                };
+            }
+            return c;
+        }));
+    };
+
     const handleExport = async () => {
         try {
             setIsExporting(true);
@@ -331,7 +344,7 @@ export default function Editor() {
                                     <Code2 size={16} />
                                     <span className="text-[10px]">Code</span>
                                 </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}>
+                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}>
                                     <Smile size={16} />
                                     <span className="text-[10px]">GIF</span>
                                 </Button>
@@ -432,6 +445,7 @@ export default function Editor() {
                     currentFrame={currentFrame}
                     onSeek={handleSeek}
                     onClipClick={id => setSelectedClipId(id)}
+                    onClipMove={handleClipMove}
                     selectedClipId={selectedClipId}
                     totalFrames={totalFrames}
                 />

@@ -9,6 +9,7 @@ interface TimelineProps {
     currentFrame: number;
     onSeek: (frame: number) => void;
     onClipClick: (clipId: string) => void;
+    onClipMove: (clipId: string, newStartFrame: number, newTrackId: number) => void;
     selectedClipId: string | null;
     totalFrames: number;
 }
@@ -23,16 +24,51 @@ export const Timeline: React.FC<TimelineProps> = ({
     currentFrame,
     onSeek,
     onClipClick,
+    onClipMove,
     selectedClipId,
     totalFrames,
 }) => {
     const containerRef = useRef<HTMLDivElement>(null);
     const [scrollLeft, setScrollLeft] = useState(0);
+    const [dragState, setDragState] = useState<{ id: string; startX: number; startFrame: number; } | null>(null);
 
     // Sync scroll
     const handleScroll = (e: React.UIEvent<HTMLDivElement>) => {
         setScrollLeft(e.currentTarget.scrollLeft);
     };
+
+    // Global Mouse Handlers for Dragging
+    useEffect(() => {
+        if (!dragState) return;
+
+        const handleMouseMove = (e: MouseEvent) => {
+            const deltaX = e.clientX - dragState.startX;
+            const deltaFrames = Math.round(deltaX / FRAME_WIDTH);
+            const newStartFrame = Math.max(0, dragState.startFrame + deltaFrames);
+
+            // TODO: Vertical dragging (Track Switching) could be implemented here
+            // For now, we stick to the same track (tracks.find(t => t.id === ...)) logic needs clip info
+            // But simpler: just pass current trackId or implement logic.
+            // We need to fetch the clip to know its trackId, or store it in dragState
+            const clip = clips.find(c => c.id === dragState.id);
+            if (clip) {
+                onClipMove(clip.id, newStartFrame, clip.trackId);
+            }
+        };
+
+        const handleMouseUp = () => {
+            setDragState(null);
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, [dragState, clips, onClipMove]);
+
 
     const handleTimelineClick = (e: React.MouseEvent<HTMLDivElement>) => {
         // If clicked on empty space (not clip), verify if header seek interaction
@@ -121,15 +157,17 @@ export const Timeline: React.FC<TimelineProps> = ({
                                                 clip.type === 'text' ? "bg-blue-500/20 border-blue-500/50 text-blue-100" :
                                                     clip.type === 'image' ? "bg-green-500/20 border-green-500/50 text-green-100" :
                                                         "bg-purple-500/20 border-purple-500/50 text-purple-100",
-                                                selectedClipId === clip.id ? "ring-2 ring-white border-transparent z-20" : "hover:brightness-110 opacity-90"
+                                                selectedClipId === clip.id ? "ring-2 ring-white border-transparent z-20" : "hover:brightness-110 opacity-90",
+                                                dragState?.id === clip.id ? "opacity-50 cursor-grabbing" : ""
                                             )}
                                             style={{
                                                 left: clip.startFrame * FRAME_WIDTH,
                                                 width: clip.durationInFrames * FRAME_WIDTH,
                                             }}
-                                            onClick={(e) => {
+                                            onMouseDown={(e) => {
                                                 e.stopPropagation();
                                                 onClipClick(clip.id);
+                                                setDragState({ id: clip.id, startX: e.clientX, startFrame: clip.startFrame });
                                             }}
                                         >
                                             {clip.title || clip.content}
