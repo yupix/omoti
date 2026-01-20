@@ -15,6 +15,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     const [isResizing, setIsResizing] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [initialClipState, setInitialClipState] = useState<{ x: number, y: number, w: number, h: number } | null>(null);
+    const [snapLines, setSnapLines] = useState<{ x: boolean, y: boolean }>({ x: false, y: false });
 
     // Safe access to clip properties for hooks/logic
     const x = clip?.x ?? 0;
@@ -48,12 +49,36 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
             const dy = (e.clientY - startPos.y) * scaleY;
 
             if (isDragging) {
-                // Determine new coordinates
                 const newX = initialClipState.x + dx;
                 const newY = initialClipState.y + dy;
 
-                // Snap to grid (optional, maybe 10px) (not implemented yet for smooth feel)
-                onUpdate({ x: Math.round(newX), y: Math.round(newY), width: initialClipState.w, height: initialClipState.h });
+                // Snap to Center Logic
+                const centerX = compWidth / 2;
+                const centerY = compHeight / 2;
+                const threshold = 15;
+
+                // Snap X
+                const currentCenterX = newX + initialClipState.w / 2;
+                let finalX = newX;
+                let snappedX = false;
+
+                if (Math.abs(currentCenterX - centerX) < threshold) {
+                    finalX = centerX - initialClipState.w / 2;
+                    snappedX = true;
+                }
+
+                // Snap Y
+                const currentCenterY = newY + initialClipState.h / 2;
+                let finalY = newY;
+                let snappedY = false;
+
+                if (Math.abs(currentCenterY - centerY) < threshold) {
+                    finalY = centerY - initialClipState.h / 2;
+                    snappedY = true;
+                }
+
+                setSnapLines({ x: snappedX, y: snappedY });
+                onUpdate({ x: Math.round(finalX), y: Math.round(finalY), width: initialClipState.w, height: initialClipState.h });
             }
 
             if (isResizing) {
@@ -69,6 +94,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
             setIsDragging(false);
             setIsResizing(false);
             setInitialClipState(null);
+            setSnapLines({ x: false, y: false });
         };
 
         window.addEventListener('mousemove', handleMouseMove);
@@ -103,6 +129,14 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
 
     return (
         <div ref={containerRef} className="absolute inset-0 pointer-events-none z-50">
+            {/* Snap Lines */}
+            {snapLines.x && (
+                <div className="absolute top-0 bottom-0 w-px bg-red-500 left-1/2 -ml-[0.5px] z-40" />
+            )}
+            {snapLines.y && (
+                <div className="absolute left-0 right-0 h-px bg-red-500 top-1/2 -mt-[0.5px] z-40" />
+            )}
+
             {/* The Gizmo Box */}
             <div style={style} onMouseDown={(e) => handleMouseDown(e, 'move')}>
 
