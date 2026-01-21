@@ -21,6 +21,7 @@ export interface Clip {
     rotate?: number; // Rotation (degrees)
     language?: string; // Programming language for code clips
     steps?: CodeStep[]; // Keyframes for code content
+    transitionDuration?: number; // Duration of code transition (frames)
 }
 
 export interface CodeStep {

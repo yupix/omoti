@@ -8,6 +8,7 @@ interface CodeHighlighterProps {
     code: string;
     language?: string;
     theme?: string;
+    transitionDuration?: number; // ms
 }
 
 // Singleton to avoid re-creating the highlighter which is expensive
@@ -17,7 +18,8 @@ let highlighterPromise: Promise<Highlighter> | null = null;
 export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
     code,
     language = 'typescript',
-    theme = 'dark-plus'
+    theme = 'dark-plus',
+    transitionDuration = 800
 }) => {
     // Always initialize to null to ensure hydration matches server (which should be null)
     const [highlighter, setHighlighter] = useState<Highlighter | null>(null);
@@ -98,7 +100,7 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
             theme={theme as any}
             highlighter={highlighter}
             code={code}
-            options={{ duration: 800, stagger: 0.3, lineNumbers: false }}
+            options={{ duration: transitionDuration, stagger: 0.3, lineNumbers: false }}
         />
     );
 };

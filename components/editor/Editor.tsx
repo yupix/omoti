@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock } from 'lucide-react';
+import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock, Upload, Grid } from 'lucide-react';
 import { Clip, Track, ClipType, CodeStep } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -25,6 +25,12 @@ const INITIAL_CLIPS: Clip[] = [
     { id: 'c2', type: 'text', trackId: 1, startFrame: 70, durationInFrames: 50, content: 'Omoti Editor', title: 'Brand Text' },
 ];
 
+interface Asset {
+    name: string;
+    url: string;
+    type: 'image' | 'video';
+}
+
 export default function Editor() {
     const [primaryColor, setPrimaryColor] = useState('#6d28d9');
     const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS); // Static tracks for now
@@ -36,11 +42,76 @@ export default function Editor() {
     const [isExporting, setIsExporting] = useState(false);
     const [player, setPlayer] = useState<PlayerRef | null>(null);
 
+    const [activeTab, setActiveTab] = useState<'properties' | 'assets'>('properties');
+    const [assets, setAssets] = useState<Asset[]>([]);
+    const [isUploading, setIsUploading] = useState(false);
+
+    // Fetch assets on load
+    useEffect(() => {
+        fetch('/api/upload')
+            .then(res => res.json())
+            .then(data => {
+                if (data.files) {
+                    const mapped = data.files.map((f: any) => ({
+                        ...f,
+                        type: f.name.match(/\.(mp4|webm)$/i) ? 'video' : 'image'
+                    }));
+                    setAssets(mapped);
+                }
+            })
+            .catch(console.error);
+    }, []);
+
+    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const file = e.target.files?.[0];
+        if (!file) return;
+
+        try {
+            setIsUploading(true);
+            const formData = new FormData();
+            formData.append('file', file);
+
+            const res = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            if (!res.ok) throw new Error('Upload failed');
+
+            const data = await res.json();
+
+            // Refresh assets
+            const newAsset: Asset = {
+                name: data.name,
+                url: data.url,
+                type: data.name.match(/\.(mp4|webm)$/i) ? 'video' : 'image'
+            };
+            setAssets(prev => [...prev, newAsset]);
+
+            // Auto-switch to assets tab
+            setActiveTab('assets');
+
+        } catch (error) {
+            console.error(error);
+            alert('Upload failed');
+        } finally {
+            setIsUploading(false);
+            e.target.value = ''; // Reset input
+        }
+    };
+
     // Dynamic total frames based on content + buffer
     const maxClipEnd = Math.max(0, ...clips.map(c => c.startFrame + c.durationInFrames));
     const totalFrames = Math.max(300, maxClipEnd + 150); // Minimum 10s, or content + 5s buffer
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
+
+    // Auto-switch tab when selecting clip
+    useEffect(() => {
+        if (selectedClipId) {
+            setActiveTab('properties');
+        }
+    }, [selectedClipId]);
 
     // Use callback ref to ensure we capture the player instance once it's available
     const onPlayerRef = React.useCallback((ref: PlayerRef) => {
@@ -321,332 +392,463 @@ export default function Editor() {
                         <h1 className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">Omoti</h1>
                     </div>
 
+                    {/* Tab Switcher */}
+                    <div className="flex border-b border-border bg-card shrink-0">
+                        <button
+                            onClick={() => setActiveTab('properties')}
+                            className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'properties' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
+                        >
+                            Properties
+                        </button>
+                        <button
+                            onClick={() => setActiveTab('assets')}
+                            className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'assets' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
+                        >
+                            Assets
+                        </button>
+                    </div>
+
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                        {selectedClip ? (
-                            <div className="space-y-4 animate-in slide-in-from-left duration-300">
-                                <div className="flex items-center justify-between">
-                                    <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Properties</h2>
-                                    <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:bg-destructive/20" onClick={removeClip}>
-                                        <Trash2 size={14} />
-                                    </Button>
-                                </div>
-
-                                <Card className="bg-secondary/20 border-border/40">
-                                    <CardHeader className="p-3 pb-0">
-                                        <CardTitle className="text-xs font-medium text-muted-foreground">Content</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-3 space-y-3">
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase text-muted-foreground">Label</Label>
-                                            <Input
-                                                value={selectedClip.title || ''}
-                                                onChange={e => handleUpdateClip('title', e.target.value)}
-                                                className="h-8 text-sm"
-                                            />
+                        {activeTab === 'properties' ? (
+                            <>
+                                {selectedClip ? (
+                                    <div className="space-y-4 animate-in slide-in-from-left duration-300">
+                                        <div className="flex items-center justify-between">
+                                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Properties</h2>
+                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:bg-destructive/20" onClick={removeClip}>
+                                                <Trash2 size={14} />
+                                            </Button>
                                         </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase text-muted-foreground">Value</Label>
-                                            {selectedClip.type === 'code' ? (
-                                                <div className="space-y-2">
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[10px] uppercase text-muted-foreground">Language</Label>
-                                                        <Select
-                                                            value={selectedClip.language || 'typescript'}
-                                                            onValueChange={(val) => handleUpdateClip('language', val)}
-                                                        >
-                                                            <SelectTrigger className="h-8 text-xs">
-                                                                <SelectValue placeholder="Language" />
-                                                            </SelectTrigger>
-                                                            <SelectContent className="max-h-[300px]">
-                                                                {Object.keys(bundledLanguages).sort().map((lang) => (
-                                                                    <SelectItem key={lang} value={lang}>
-                                                                        {lang}
-                                                                    </SelectItem>
-                                                                ))}
-                                                            </SelectContent>
-                                                        </Select>
-                                                    </div>
-                                                    <div className="space-y-4">
-                                                        <div className="flex items-center justify-between">
-                                                            <Label className="text-[10px] uppercase text-muted-foreground">Steps (Keyframes)</Label>
-                                                            <Button
-                                                                size="sm" variant="ghost" className="h-5 px-2 text-[10px]"
-                                                                onClick={() => {
-                                                                    const steps = selectedClip.steps || [];
-                                                                    const lastStep = steps[steps.length - 1];
-                                                                    const newStep: CodeStep = {
-                                                                        code: lastStep ? lastStep.code : '',
-                                                                        frameOffset: lastStep ? lastStep.frameOffset + 30 : 0
-                                                                    };
-                                                                    handleUpdateClip('steps', [...steps, newStep]);
-                                                                }}
-                                                            >
-                                                                <Plus size={10} className="mr-1" /> Add Step
-                                                            </Button>
-                                                        </div>
 
-                                                        <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
-                                                            {(selectedClip.steps || [{ code: selectedClip.content, frameOffset: 0 }]).map((step, index) => (
-                                                                <div key={index} className="space-y-2 p-2 rounded-md border border-border bg-background/50 relative group">
-                                                                    <div className="flex items-start gap-2 mb-1">
-                                                                        <div className="flex-1 space-y-1">
-                                                                            <div className="flex justify-between items-center">
-                                                                                <Label className="text-[9px] uppercase text-muted-foreground">Transition Time (Relative)</Label>
-                                                                                <span className="text-[9px] font-mono text-muted-foreground bg-primary/10 px-1 rounded">
-                                                                                    Global: {selectedClip.startFrame + step.frameOffset}f
-                                                                                </span>
-                                                                            </div>
-                                                                            <div className="flex gap-1">
-                                                                                <Input
-                                                                                    type="number"
-                                                                                    className="h-7 text-xs"
-                                                                                    value={step.frameOffset}
-                                                                                    onChange={(e) => {
-                                                                                        const newSteps = [...(selectedClip.steps || [])];
-                                                                                        newSteps[index] = { ...step, frameOffset: Number(e.target.value) };
-                                                                                        handleUpdateClip('steps', newSteps);
-                                                                                    }}
-                                                                                />
-                                                                                <Button
-                                                                                    size="icon" variant="outline" className="h-7 w-7 flex-shrink-0"
-                                                                                    title="Set to Current Playhead"
-                                                                                    onClick={() => {
-                                                                                        const newOffset = Math.max(0, currentFrame - selectedClip.startFrame);
-                                                                                        const newSteps = [...(selectedClip.steps || [])];
-                                                                                        newSteps[index] = { ...step, frameOffset: newOffset };
-                                                                                        handleUpdateClip('steps', newSteps);
-                                                                                    }}
-                                                                                >
-                                                                                    <Clock size={12} />
-                                                                                </Button>
-                                                                            </div>
-                                                                        </div>
-                                                                        <Button
-                                                                            size="icon" variant="ghost" className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity mt-5"
-                                                                            onClick={() => {
-                                                                                const newSteps = (selectedClip.steps || []).filter((_, i) => i !== index);
-                                                                                handleUpdateClip('steps', newSteps);
-                                                                            }}
-                                                                            disabled={(selectedClip.steps || []).length <= 1}
-                                                                        >
-                                                                            <Trash2 size={12} />
-                                                                        </Button>
+                                        <Card className="bg-secondary/20 border-border/40">
+                                            <CardHeader className="p-3 pb-0">
+                                                <CardTitle className="text-xs font-medium text-muted-foreground">Content</CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="p-3 space-y-3">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Label</Label>
+                                                    <Input
+                                                        value={selectedClip.title || ''}
+                                                        onChange={e => handleUpdateClip('title', e.target.value)}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Value</Label>
+                                                    {selectedClip.type === 'code' ? (
+                                                        <div className="space-y-2">
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[10px] uppercase text-muted-foreground">Language</Label>
+                                                                <Select
+                                                                    value={selectedClip.language || 'typescript'}
+                                                                    onValueChange={(val) => handleUpdateClip('language', val)}
+                                                                >
+                                                                    <SelectTrigger className="h-8 text-xs">
+                                                                        <SelectValue placeholder="Language" />
+                                                                    </SelectTrigger>
+                                                                    <SelectContent className="max-h-[300px]">
+                                                                        {Object.keys(bundledLanguages).sort().map((lang) => (
+                                                                            <SelectItem key={lang} value={lang}>
+                                                                                {lang}
+                                                                            </SelectItem>
+                                                                        ))}
+                                                                    </SelectContent>
+                                                                </Select>
+                                                            </div>
+                                                            <div className="space-y-1">
+                                                                <Label className="text-[10px] uppercase text-muted-foreground">Transition Duration (Frames)</Label>
+                                                                <Input
+                                                                    type="number"
+                                                                    value={selectedClip.transitionDuration || 24}
+                                                                    onChange={e => handleUpdateClip('transitionDuration', parseInt(e.target.value))}
+                                                                    className="h-8 text-xs font-mono"
+                                                                />
+                                                            </div>
+                                                            <div className="space-y-4">
+                                                                {/* Visual Timeline Bar */}
+                                                                <div className="space-y-1">
+                                                                    <div className="flex justify-between text-[9px] text-muted-foreground uppercase">
+                                                                        <span>Timeline Preview</span>
+                                                                        <span>{selectedClip.durationInFrames}f</span>
                                                                     </div>
-                                                                    <textarea
-                                                                        value={step.code}
-                                                                        onChange={e => {
-                                                                            const newSteps = [...(selectedClip.steps || [])];
-                                                                            newSteps[index] = { ...step, code: e.target.value };
+                                                                    <div className="relative h-6 bg-secondary/50 rounded overflow-hidden border border-border/50">
+                                                                        {/* Playhead Position */}
+                                                                        <div
+                                                                            className="absolute top-0 bottom-0 border-l-[2px] border-red-500 z-10 transition-all duration-75"
+                                                                            style={{
+                                                                                left: `${Math.min(100, Math.max(0, ((currentFrame - selectedClip.startFrame) / selectedClip.durationInFrames) * 100))}%`
+                                                                            }}
+                                                                        />
+                                                                        {/* Active Range Highlight */}
+                                                                        <div
+                                                                            className="absolute top-0 bottom-0 left-0 bg-primary/10 transition-all duration-75"
+                                                                            style={{
+                                                                                width: `${Math.min(100, Math.max(0, ((currentFrame - selectedClip.startFrame) / selectedClip.durationInFrames) * 100))}%`
+                                                                            }}
+                                                                        />
+
+                                                                        {/* Step Markers */}
+                                                                        {(selectedClip.steps || []).map((s, i) => (
+                                                                            <div
+                                                                                key={i}
+                                                                                className="absolute top-1 bottom-1 w-1 bg-primary rounded-full hover:bg-primary/80 z-20 ring-1 ring-black/50"
+                                                                                style={{ left: `${(s.frameOffset / selectedClip.durationInFrames) * 100}%` }}
+                                                                                title={`Step at ${s.frameOffset}f`}
+                                                                            />
+                                                                        ))}
+                                                                    </div>
+                                                                </div>
+
+                                                                <div className="flex items-center justify-between">
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Keyframes</Label>
+                                                                    <Button
+                                                                        size="sm" variant="secondary" className="h-6 px-2 text-[10px] hover:bg-primary hover:text-primary-foreground"
+                                                                        onClick={() => {
+                                                                            const offset = Math.max(0, currentFrame - selectedClip.startFrame);
+                                                                            // Allow adding slightly past end? No, strictly inside or at end.
+
+                                                                            const steps = selectedClip.steps || [];
+                                                                            // Find currently active code to copy
+                                                                            const prevStep = [...steps].reverse().find(s => s.frameOffset <= offset);
+                                                                            const baseCode = prevStep ? prevStep.code : selectedClip.content;
+
+                                                                            const newSteps = [...steps.filter(s => s.frameOffset !== offset), {
+                                                                                code: baseCode,
+                                                                                frameOffset: offset
+                                                                            }].sort((a, b) => a.frameOffset - b.frameOffset);
+
                                                                             handleUpdateClip('steps', newSteps);
                                                                         }}
-                                                                        className="w-full h-20 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                                                                    >
+                                                                        <Plus size={12} className="mr-1" /> Add Effect at Playhead
+                                                                    </Button>
+                                                                </div>
+
+                                                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                                                    {(selectedClip.steps || [{ code: selectedClip.content, frameOffset: 0 }]).map((step, index) => (
+                                                                        <div key={index} className="space-y-2 p-2 rounded-md border border-border bg-background/50 relative group">
+                                                                            <div className="flex items-start gap-2 mb-1">
+                                                                                <div className="flex-1 space-y-1">
+                                                                                    <div className="flex justify-between items-center">
+                                                                                        <Label className="text-[9px] uppercase text-muted-foreground">Start Offset (Frames)</Label>
+                                                                                        <span className="text-[9px] font-mono text-muted-foreground bg-primary/10 px-1 rounded">
+                                                                                            Global: {selectedClip.startFrame + step.frameOffset}f
+                                                                                        </span>
+                                                                                    </div>
+                                                                                    <div className="flex gap-1">
+                                                                                        <Input
+                                                                                            type="number"
+                                                                                            className="h-7 text-xs"
+                                                                                            value={step.frameOffset}
+                                                                                            onChange={(e) => {
+                                                                                                const newSteps = [...(selectedClip.steps || [])];
+                                                                                                newSteps[index] = { ...step, frameOffset: Number(e.target.value) };
+                                                                                                handleUpdateClip('steps', newSteps);
+                                                                                            }}
+                                                                                        />
+                                                                                        <Button
+                                                                                            size="icon" variant="outline" className="h-7 w-7 flex-shrink-0"
+                                                                                            title="Set to Current Playhead"
+                                                                                            onClick={() => {
+                                                                                                const newOffset = Math.max(0, currentFrame - selectedClip.startFrame);
+                                                                                                const newSteps = [...(selectedClip.steps || [])];
+                                                                                                newSteps[index] = { ...step, frameOffset: newOffset };
+                                                                                                handleUpdateClip('steps', newSteps);
+                                                                                            }}
+                                                                                        >
+                                                                                            <Clock size={12} />
+                                                                                        </Button>
+                                                                                    </div>
+                                                                                </div>
+                                                                                <Button
+                                                                                    size="icon" variant="ghost" className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity mt-5"
+                                                                                    onClick={() => {
+                                                                                        const newSteps = (selectedClip.steps || []).filter((_, i) => i !== index);
+                                                                                        handleUpdateClip('steps', newSteps);
+                                                                                    }}
+                                                                                    disabled={(selectedClip.steps || []).length <= 1}
+                                                                                >
+                                                                                    <Trash2 size={12} />
+                                                                                </Button>
+                                                                            </div>
+                                                                            <textarea
+                                                                                value={step.code}
+                                                                                onChange={e => {
+                                                                                    const newSteps = [...(selectedClip.steps || [])];
+                                                                                    newSteps[index] = { ...step, code: e.target.value };
+                                                                                    handleUpdateClip('steps', newSteps);
+                                                                                }}
+                                                                                className="w-full h-20 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                                                                            />
+                                                                        </div>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ) : (
+                                                        <Input
+                                                            value={selectedClip.content}
+                                                            onChange={e => handleUpdateClip('content', e.target.value)}
+                                                            className="h-8 text-sm font-mono"
+                                                        />
+                                                    )}
+                                                </div>
+                                                {/* Style Properties */}
+                                                {(selectedClip.type === 'shape' || selectedClip.type === 'text') && (
+                                                    <div className="space-y-3 pt-2 border-t border-border/50">
+                                                        <div className="space-y-1">
+                                                            <Label className="text-[10px] uppercase text-muted-foreground">Color</Label>
+                                                            <div className="flex gap-2">
+                                                                <Input
+                                                                    type="color"
+                                                                    value={(selectedClip.style?.backgroundColor as string) || (selectedClip.style?.color as string) || '#ffffff'}
+                                                                    onChange={e => handleUpdateStyle(selectedClip.type === 'text' ? 'color' : 'backgroundColor', e.target.value)}
+                                                                    className="w-full h-8 p-1 cursor-pointer"
+                                                                />
+                                                            </div>
+                                                        </div>
+
+                                                        {selectedClip.type === 'text' && (
+                                                            <>
+                                                                <div className="space-y-1">
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Font Family</Label>
+                                                                    <Select
+                                                                        value={(selectedClip.style?.fontFamily as string) || 'sans-serif'}
+                                                                        onValueChange={(val) => handleUpdateStyle('fontFamily', val)}
+                                                                    >
+                                                                        <SelectTrigger className="h-8 text-xs">
+                                                                            <SelectValue placeholder="Font" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="sans-serif">Sans Serif</SelectItem>
+                                                                            <SelectItem value="serif">Serif</SelectItem>
+                                                                            <SelectItem value="monospace">Monospace</SelectItem>
+                                                                            <SelectItem value="Inter">Inter</SelectItem>
+                                                                            <SelectItem value="Roboto">Roboto</SelectItem>
+                                                                            <SelectItem value="'Comic Sans MS'">Comic Sans</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                                <div className="space-y-1">
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Font Size (px)</Label>
+                                                                    <Input
+                                                                        type="number"
+                                                                        value={typeof selectedClip.style?.fontSize === 'string' ? parseInt(selectedClip.style.fontSize) : 80}
+                                                                        onChange={e => handleUpdateStyle('fontSize', `${e.target.value}px`)}
+                                                                        className="h-8 text-sm"
                                                                     />
                                                                 </div>
-                                                            ))}
-                                                        </div>
+                                                                <div className="space-y-1">
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Font Weight</Label>
+                                                                    <Select
+                                                                        value={String(selectedClip.style?.fontWeight || 800)}
+                                                                        onValueChange={(val) => handleUpdateStyle('fontWeight', parseInt(val))}
+                                                                    >
+                                                                        <SelectTrigger className="h-8 text-xs">
+                                                                            <SelectValue placeholder="Weight" />
+                                                                        </SelectTrigger>
+                                                                        <SelectContent>
+                                                                            <SelectItem value="400">Normal (400)</SelectItem>
+                                                                            <SelectItem value="600">Semi Bold (600)</SelectItem>
+                                                                            <SelectItem value="800">Bold (800)</SelectItem>
+                                                                            <SelectItem value="900">Black (900)</SelectItem>
+                                                                        </SelectContent>
+                                                                    </Select>
+                                                                </div>
+                                                            </>
+                                                        )}
                                                     </div>
-                                                </div>
-                                            ) : (
-                                                <Input
-                                                    value={selectedClip.content}
-                                                    onChange={e => handleUpdateClip('content', e.target.value)}
-                                                    className="h-8 text-sm font-mono"
-                                                />
-                                            )}
-                                        </div>
-                                        {/* Style Properties */}
-                                        {(selectedClip.type === 'shape' || selectedClip.type === 'text') && (
-                                            <div className="space-y-3 pt-2 border-t border-border/50">
+                                                )}
+                                            </CardContent>
+                                        </Card>
+
+                                        {/* Animation Card */}
+                                        <Card className="bg-secondary/20 border-border/40">
+                                            <CardHeader className="p-3 pb-0">
+                                                <CardTitle className="text-xs font-medium text-muted-foreground">Animation (Transition)</CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="p-3 space-y-3">
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">Color</Label>
-                                                    <div className="flex gap-2">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Type</Label>
+                                                    <Select value={selectedClip.animation?.type || 'none'} onValueChange={(val) => handleUpdateAnimation('type', val)}>
+                                                        <SelectTrigger className="h-8 text-xs">
+                                                            <SelectValue placeholder="None" />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="none">None</SelectItem>
+                                                            <SelectItem value="fade">Fade In/Out</SelectItem>
+                                                            <SelectItem value="pop">Pop (Scale)</SelectItem>
+                                                            <SelectItem value="slide">Slide Up</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Duration (Frames)</Label>
+                                                    <Input
+                                                        type="number"
+                                                        value={selectedClip.animation?.duration || 0}
+                                                        onChange={e => handleUpdateAnimation('duration', Number(e.target.value))}
+                                                        className="h-8 text-sm"
+                                                    />
+                                                </div>
+                                            </CardContent>
+                                        </Card>
+
+                                        <Card className="bg-secondary/20 border-border/40">
+                                            <CardHeader className="p-3 pb-0">
+                                                <CardTitle className="text-xs font-medium text-muted-foreground">Timing</CardTitle>
+                                            </CardHeader>
+                                            <CardContent className="p-3 space-y-3">
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Start</Label>
                                                         <Input
-                                                            type="color"
-                                                            value={(selectedClip.style?.backgroundColor as string) || (selectedClip.style?.color as string) || '#ffffff'}
-                                                            onChange={e => handleUpdateStyle(selectedClip.type === 'text' ? 'color' : 'backgroundColor', e.target.value)}
-                                                            className="w-full h-8 p-1 cursor-pointer"
+                                                            type="number"
+                                                            value={selectedClip.startFrame}
+                                                            onChange={e => handleUpdateClip('startFrame', Number(e.target.value))}
+                                                            className="h-8 text-sm"
+                                                        />
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Measured</Label>
+                                                        <Input
+                                                            type="number"
+                                                            value={selectedClip.durationInFrames}
+                                                            onChange={e => handleUpdateClip('durationInFrames', Number(e.target.value))}
+                                                            className="h-8 text-sm"
                                                         />
                                                     </div>
                                                 </div>
+                                            </CardContent>
+                                        </Card>
+                                    </div>
+                                ) : (
+                                    <div className="flex flex-col items-center justify-center h-48 text-muted-foreground space-y-2 opacity-50">
+                                        <Layers size={32} />
+                                        <p className="text-sm">Select a clip to edit</p>
+                                    </div>
+                                )}
 
-                                                {selectedClip.type === 'text' && (
-                                                    <>
-                                                        <div className="space-y-1">
-                                                            <Label className="text-[10px] uppercase text-muted-foreground">Font Family</Label>
-                                                            <Select
-                                                                value={(selectedClip.style?.fontFamily as string) || 'sans-serif'}
-                                                                onValueChange={(val) => handleUpdateStyle('fontFamily', val)}
-                                                            >
-                                                                <SelectTrigger className="h-8 text-xs">
-                                                                    <SelectValue placeholder="Font" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="sans-serif">Sans Serif</SelectItem>
-                                                                    <SelectItem value="serif">Serif</SelectItem>
-                                                                    <SelectItem value="monospace">Monospace</SelectItem>
-                                                                    <SelectItem value="Inter">Inter</SelectItem>
-                                                                    <SelectItem value="Roboto">Roboto</SelectItem>
-                                                                    <SelectItem value="'Comic Sans MS'">Comic Sans</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <Label className="text-[10px] uppercase text-muted-foreground">Font Size (px)</Label>
-                                                            <Input
-                                                                type="number"
-                                                                value={typeof selectedClip.style?.fontSize === 'string' ? parseInt(selectedClip.style.fontSize) : 80}
-                                                                onChange={e => handleUpdateStyle('fontSize', `${e.target.value}px`)}
-                                                                className="h-8 text-sm"
-                                                            />
-                                                        </div>
-                                                        <div className="space-y-1">
-                                                            <Label className="text-[10px] uppercase text-muted-foreground">Font Weight</Label>
-                                                            <Select
-                                                                value={String(selectedClip.style?.fontWeight || 800)}
-                                                                onValueChange={(val) => handleUpdateStyle('fontWeight', parseInt(val))}
-                                                            >
-                                                                <SelectTrigger className="h-8 text-xs">
-                                                                    <SelectValue placeholder="Weight" />
-                                                                </SelectTrigger>
-                                                                <SelectContent>
-                                                                    <SelectItem value="400">Normal (400)</SelectItem>
-                                                                    <SelectItem value="600">Semi Bold (600)</SelectItem>
-                                                                    <SelectItem value="800">Bold (800)</SelectItem>
-                                                                    <SelectItem value="900">Black (900)</SelectItem>
-                                                                </SelectContent>
-                                                            </Select>
-                                                        </div>
-                                                    </>
-                                                )}
-                                            </div>
-                                        )}
-                                    </CardContent>
-                                </Card>
+                                <div className="pt-4 border-t border-border/50">
+                                    <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Add Element</h2>
+                                    <div className="grid grid-cols-4 gap-2">
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('text')}>
+                                            <FileText size={16} />
+                                            <span className="text-[10px]">Text</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('video')}>
+                                            <VideoIcon size={16} />
+                                            <span className="text-[10px]">Video</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image')}>
+                                            <ImageIcon size={16} />
+                                            <span className="text-[10px]">Image</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('audio')}>
+                                            <Volume2 size={16} />
+                                            <span className="text-[10px]">Audio</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('shape', 'rect')}>
+                                            <Square size={16} />
+                                            <span className="text-[10px]">Rect</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('shape', 'circle')}>
+                                            <Circle size={16} />
+                                            <span className="text-[10px]">Circle</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('code')}>
+                                            <Code2 size={16} />
+                                            <span className="text-[10px]">Code</span>
+                                        </Button>
+                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}>
+                                            <Smile size={16} />
+                                            <span className="text-[10px]">GIF</span>
+                                        </Button>
+                                    </div>
+                                </div>
 
-                                {/* Animation Card */}
-                                <Card className="bg-secondary/20 border-border/40">
-                                    <CardHeader className="p-3 pb-0">
-                                        <CardTitle className="text-xs font-medium text-muted-foreground">Animation (Transition)</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-3 space-y-3">
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase text-muted-foreground">Type</Label>
-                                            <Select value={selectedClip.animation?.type || 'none'} onValueChange={(val) => handleUpdateAnimation('type', val)}>
-                                                <SelectTrigger className="h-8 text-xs">
-                                                    <SelectValue placeholder="None" />
-                                                </SelectTrigger>
-                                                <SelectContent>
-                                                    <SelectItem value="none">None</SelectItem>
-                                                    <SelectItem value="fade">Fade In/Out</SelectItem>
-                                                    <SelectItem value="pop">Pop (Scale)</SelectItem>
-                                                    <SelectItem value="slide">Slide Up</SelectItem>
-                                                </SelectContent>
-                                            </Select>
-                                        </div>
-                                        <div className="space-y-1">
-                                            <Label className="text-[10px] uppercase text-muted-foreground">Duration (Frames)</Label>
+                                <div className="pt-4 border-t border-border/50">
+                                    <Label className="text-xs text-muted-foreground mb-2 block">Global Color</Label>
+                                    <div className="flex gap-2">
+                                        <div className="relative">
                                             <Input
-                                                type="number"
-                                                value={selectedClip.animation?.duration || 0}
-                                                onChange={e => handleUpdateAnimation('duration', Number(e.target.value))}
-                                                className="h-8 text-sm"
+                                                type="color"
+                                                value={primaryColor}
+                                                onChange={e => setPrimaryColor(e.target.value)}
+                                                className="w-10 h-8 p-1 cursor-pointer rounded-md overflow-hidden"
                                             />
                                         </div>
-                                    </CardContent>
-                                </Card>
+                                        <Input
+                                            value={primaryColor}
+                                            onChange={e => setPrimaryColor(e.target.value)}
+                                            className="flex-1 h-8 font-mono uppercase bg-background/50 border-border/50"
+                                        />
+                                    </div>
+                                </div>
 
-                                <Card className="bg-secondary/20 border-border/40">
-                                    <CardHeader className="p-3 pb-0">
-                                        <CardTitle className="text-xs font-medium text-muted-foreground">Timing</CardTitle>
-                                    </CardHeader>
-                                    <CardContent className="p-3 space-y-3">
-                                        <div className="grid grid-cols-2 gap-2">
-                                            <div className="space-y-1">
-                                                <Label className="text-[10px] uppercase text-muted-foreground">Start</Label>
-                                                <Input
-                                                    type="number"
-                                                    value={selectedClip.startFrame}
-                                                    onChange={e => handleUpdateClip('startFrame', Number(e.target.value))}
-                                                    className="h-8 text-sm"
-                                                />
-                                            </div>
-                                            <div className="space-y-1">
-                                                <Label className="text-[10px] uppercase text-muted-foreground">Measured</Label>
-                                                <Input
-                                                    type="number"
-                                                    value={selectedClip.durationInFrames}
-                                                    onChange={e => handleUpdateClip('durationInFrames', Number(e.target.value))}
-                                                    className="h-8 text-sm"
-                                                />
-                                            </div>
-                                        </div>
-                                    </CardContent>
-                                </Card>
-                            </div>
+                            </>
                         ) : (
-                            <div className="flex flex-col items-center justify-center h-48 text-muted-foreground space-y-2 opacity-50">
-                                <Layers size={32} />
-                                <p className="text-sm">Select a clip to edit</p>
+                            <div className="space-y-4 animate-in slide-in-from-right duration-300">
+                                {/* Upload Box */}
+                                <div
+                                    className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
+                                    onClick={() => document.getElementById('asset-upload')?.click()}
+                                >
+                                    <input
+                                        type="file"
+                                        id="asset-upload"
+                                        className="hidden"
+                                        onChange={handleFileUpload}
+                                        accept="image/*,video/*"
+                                    />
+                                    <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
+                                        {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}
+                                    </div>
+                                    <div className="text-center">
+                                        <p className="text-xs font-medium text-foreground">Click to Upload</p>
+                                        <p className="text-[10px] text-muted-foreground">Images or Videos</p>
+                                    </div>
+                                </div>
+
+                                {/* Asset Grid */}
+                                <div>
+                                    <div className="flex items-center justify-between mb-2">
+                                        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Library</h2>
+                                        <span className="text-[10px] text-muted-foreground">{assets.length} items</span>
+                                    </div>
+
+                                    {assets.length === 0 ? (
+                                        <div className="text-center py-8 text-muted-foreground">
+                                            <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
+                                            <p className="text-xs">No assets yet</p>
+                                        </div>
+                                    ) : (
+                                        <div className="grid grid-cols-2 gap-2">
+                                            {assets.map((asset, i) => (
+                                                <div
+                                                    key={i}
+                                                    className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all"
+                                                    onClick={() => addClip(asset.type, asset.url)}
+                                                    title={asset.name}
+                                                >
+                                                    {asset.type === 'video' ? (
+                                                        <video src={asset.url} className="w-full h-full object-cover pointer-events-none" />
+                                                    ) : (
+                                                        <img src={asset.url} alt={asset.name} className="w-full h-full object-cover pointer-events-none" />
+                                                    )}
+                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                                                        <Plus className="text-white drop-shadow-md" size={20} />
+                                                    </div>
+                                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 pt-4">
+                                                        <p className="text-[10px] text-white truncate px-0.5">{asset.name}</p>
+                                                    </div>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    )}
+                                </div>
                             </div>
                         )}
-
-                        <div className="pt-4 border-t border-border/50">
-                            <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Add Element</h2>
-                            <div className="grid grid-cols-4 gap-2">
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('text')}>
-                                    <FileText size={16} />
-                                    <span className="text-[10px]">Text</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('video')}>
-                                    <VideoIcon size={16} />
-                                    <span className="text-[10px]">Video</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image')}>
-                                    <ImageIcon size={16} />
-                                    <span className="text-[10px]">Image</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('audio')}>
-                                    <Volume2 size={16} />
-                                    <span className="text-[10px]">Audio</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('shape', 'rect')}>
-                                    <Square size={16} />
-                                    <span className="text-[10px]">Rect</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('shape', 'circle')}>
-                                    <Circle size={16} />
-                                    <span className="text-[10px]">Circle</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('code')}>
-                                    <Code2 size={16} />
-                                    <span className="text-[10px]">Code</span>
-                                </Button>
-                                <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}>
-                                    <Smile size={16} />
-                                    <span className="text-[10px]">GIF</span>
-                                </Button>
-                            </div>
-                        </div>
-
-                        <div className="pt-4 border-t border-border/50">
-                            <Label className="text-xs text-muted-foreground mb-2 block">Global Color</Label>
-                            <div className="flex gap-2">
-                                <div className="relative">
-                                    <Input
-                                        type="color"
-                                        value={primaryColor}
-                                        onChange={e => setPrimaryColor(e.target.value)}
-                                        className="w-10 h-8 p-1 cursor-pointer rounded-md overflow-hidden"
-                                    />
-                                </div>
-                                <Input
-                                    value={primaryColor}
-                                    onChange={e => setPrimaryColor(e.target.value)}
-                                    className="flex-1 h-8 font-mono uppercase bg-background/50 border-border/50"
-                                />
-                            </div>
-                        </div>
-
                     </div>
                 </aside>
 

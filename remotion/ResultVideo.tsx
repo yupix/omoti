@@ -5,12 +5,13 @@ import { CodeHighlighter } from '../components/CodeHighlighter';
 
 const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
     const frame = useCurrentFrame();
+    const { fps } = useVideoConfig();
 
     let displayCode = clip.content;
 
     // Logic to determine which step is active
     if (clip.steps && clip.steps.length > 0) {
-        const localFrame = frame - clip.startFrame;
+        const localFrame = frame; // Frame is already relative inside Sequence
         // Find the last step that has frameOffset <= localFrame
         const activeStep = [...clip.steps]
             .sort((a, b) => a.frameOffset - b.frameOffset)
@@ -34,6 +35,7 @@ const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
             code={displayCode}
             language={clip.language || 'typescript'}
             theme="dark-plus"
+            transitionDuration={(clip.transitionDuration || 24) * (1000 / fps)}
         />
     );
 };
