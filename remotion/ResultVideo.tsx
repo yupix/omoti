@@ -143,6 +143,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                 <Video
                     src={clip.content}
                     startFrom={Math.round(clip.mediaStartOffset || 0)}
+                    playbackRate={clip.playbackRate || 1}
                     style={{
                         width: '100%',
                         height: '100%',
@@ -157,22 +158,23 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     if (clip.type === 'image') {
         // Handle GIF with restart logic using @remotion/gif
         if (clip.content.toLowerCase().endsWith('.gif')) {
+            const speed = clip.playbackRate || 1;
+            const startOffset = clip.mediaStartOffset || 0;
+            // Calculate effective frame based on offset and speed
+            const displayFrame = startOffset + (frame * speed);
+
             return (
                 <div style={positionStyle}>
-                    <Sequence
-                        from={-Math.round(clip.mediaStartOffset || 0)}
-                        layout="none"
-                    >
-                        <Gif
-                            src={clip.content}
-                            style={{
-                                width: '100%',
-                                height: '100%',
-                                objectFit: 'cover',
-                                ...clip.style
-                            }}
-                        />
-                    </Sequence>
+                    <Gif
+                        src={clip.content}
+                        frame={displayFrame}
+                        style={{
+                            width: '100%',
+                            height: '100%',
+                            objectFit: 'cover',
+                            ...clip.style
+                        }}
+                    />
                 </div>
             );
         }
@@ -211,7 +213,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'audio') {
-        return <Audio src={clip.content} startFrom={Math.round(clip.mediaStartOffset || 0)} />;
+        return <Audio src={clip.content} startFrom={Math.round(clip.mediaStartOffset || 0)} playbackRate={clip.playbackRate || 1} />;
     }
 
     return null;
@@ -222,6 +224,14 @@ export const ResultVideo: React.FC<{
     primaryColor: string;
 }> = ({ clips, primaryColor }) => {
     const frame = useCurrentFrame();
+
+    // Sort clips by trackId descending
+    // Visually top tracks (Lower IDs) should be rendered last (Highest Z-index)
+    // Track 1 (Top) -> Render Last -> Front
+    // Track 4 (Bottom) -> Render First -> Back
+    const sortedClips = React.useMemo(() => {
+        return [...clips].sort((a, b) => b.trackId - a.trackId);
+    }, [clips]);
 
     return (
         <div style={{
@@ -242,7 +252,7 @@ export const ResultVideo: React.FC<{
                 }}
             />
 
-            {clips && clips.map((clip, index) => (
+            {sortedClips.map((clip, index) => (
                 <Sequence
                     key={clip.id}
                     from={clip.startFrame}

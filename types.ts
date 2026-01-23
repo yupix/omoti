@@ -23,6 +23,7 @@ export interface Clip {
     steps?: CodeStep[]; // Keyframes for code content
     transitionDuration?: number; // Duration of code transition (frames)
     mediaStartOffset?: number; // Offset in frames from the start of the media file
+    playbackRate?: number; // Playback speed (default 1)
 }
 
 export interface CodeStep {

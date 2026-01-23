@@ -68,14 +68,17 @@ export default function Editor() {
             .then(async (data) => {
                 if (data.files) {
                     const mapped = await Promise.all(data.files.map(async (f: any) => {
+                        const origin = window.location.origin;
+                        const fullUrl = `${origin}/uploads/${f.name}`;
                         const type = f.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
                             f.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' : 'image';
                         let duration = 0;
                         if (type === 'video' || type === 'audio') {
-                            duration = await getMediaDuration(`/uploads/${f.name}`, type);
+                            duration = await getMediaDuration(fullUrl, type);
                         }
                         return {
                             ...f,
+                            url: fullUrl,
                             type,
                             duration
                         };
@@ -108,14 +111,17 @@ export default function Editor() {
             const type = data.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
                 data.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' : 'image';
 
+            const origin = window.location.origin;
+            const fullUrl = `${origin}${data.url}`;
+
             let duration = 0;
             if (type === 'video' || type === 'audio') {
-                duration = await getMediaDuration(data.url, type);
+                duration = await getMediaDuration(fullUrl, type);
             }
 
             const newAsset: Asset = {
                 name: data.name,
-                url: data.url,
+                url: fullUrl,
                 type,
                 duration
             };
@@ -594,6 +600,26 @@ export default function Editor() {
                                                 <Trash2 size={14} />
                                             </Button>
                                         </div>
+
+                                        {(selectedClip.type === 'video' || selectedClip.type === 'audio' || (selectedClip.type === 'image' && selectedClip.content.toLowerCase().endsWith('.gif'))) && (
+                                            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card">
+                                                <Label className="text-[10px] uppercase text-muted-foreground">Playback Speed (x)</Label>
+                                                <div className="flex items-center gap-2">
+                                                    <Input
+                                                        type="number"
+                                                        step="0.1"
+                                                        min="0.1"
+                                                        max="10"
+                                                        className="h-8 text-xs font-mono"
+                                                        value={selectedClip.playbackRate || 1}
+                                                        onChange={(e) => handleUpdateClip('playbackRate', parseFloat(e.target.value) || 1)}
+                                                    />
+                                                    <span className="text-xs text-muted-foreground w-8 text-right">
+                                                        {(selectedClip.playbackRate || 1).toFixed(1)}x
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        )}
 
                                         <Card className="bg-secondary/20 border-border/40">
                                             <CardHeader className="p-3 pb-0">
@@ -1202,10 +1228,10 @@ export default function Editor() {
                         </div>
                     </div>
                 </main>
-            </div>
+            </div >
 
             {/* Bottom: Timeline */}
-            <div className="h-[300px] flex-shrink-0 z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.3)]">
+            < div className="h-[300px] flex-shrink-0 z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.3)]" >
                 <Timeline
                     tracks={tracks}
                     clips={clips}
@@ -1222,51 +1248,53 @@ export default function Editor() {
                     selectedClipId={selectedClipId}
                     totalFrames={totalFrames}
                 />
-            </div>
+            </div >
 
             {/* Context Menu */}
-            {contextMenu && (
-                <div
-                    className="fixed z-50 min-w-32 bg-popover border border-border shadow-md rounded-md overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
-                    style={{ left: contextMenu.x, top: contextMenu.y }}
-                >
-                    <div className="p-1 flex flex-col gap-0.5">
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start h-8 px-2"
-                            onClick={() => {
-                                splitClip(contextMenu.clipId);
-                                setContextMenu(null);
-                            }}
-                        >
-                            <Scissors size={14} className="mr-2" />
-                            Split at Playhead
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start h-8 px-2"
-                            onClick={() => handleDuplicateClip(contextMenu.clipId)}
-                        >
-                            <Copy size={14} className="mr-2" />
-                            Duplicate
-                        </Button>
-                        <Button
-                            variant="ghost"
-                            size="sm"
-                            className="justify-start h-8 px-2 text-destructive hover:text-destructive"
-                            onClick={() => {
-                                setClips(clips.filter(c => c.id !== contextMenu.clipId));
-                                setContextMenu(null);
-                            }}
-                        >
-                            <Trash2 size={14} className="mr-2" />
-                            Delete
-                        </Button>
+            {
+                contextMenu && (
+                    <div
+                        className="fixed z-50 min-w-32 bg-popover border border-border shadow-md rounded-md overflow-hidden text-sm animate-in fade-in zoom-in-95 duration-100"
+                        style={{ left: contextMenu.x, top: contextMenu.y }}
+                    >
+                        <div className="p-1 flex flex-col gap-0.5">
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="justify-start h-8 px-2"
+                                onClick={() => {
+                                    splitClip(contextMenu.clipId);
+                                    setContextMenu(null);
+                                }}
+                            >
+                                <Scissors size={14} className="mr-2" />
+                                Split at Playhead
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="justify-start h-8 px-2"
+                                onClick={() => handleDuplicateClip(contextMenu.clipId)}
+                            >
+                                <Copy size={14} className="mr-2" />
+                                Duplicate
+                            </Button>
+                            <Button
+                                variant="ghost"
+                                size="sm"
+                                className="justify-start h-8 px-2 text-destructive hover:text-destructive"
+                                onClick={() => {
+                                    setClips(clips.filter(c => c.id !== contextMenu.clipId));
+                                    setContextMenu(null);
+                                }}
+                            >
+                                <Trash2 size={14} className="mr-2" />
+                                Delete
+                            </Button>
+                        </div>
                     </div>
-                </div>
-            )}
-        </div>
+                )
+            }
+        </div >
     );
 }
