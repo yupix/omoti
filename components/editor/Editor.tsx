@@ -166,13 +166,44 @@ export default function Editor() {
         handleUpdateClip('animation', newAnimation);
     };
 
+    const checkCollision = (id: string, start: number, duration: number, track: number) => {
+        const end = start + duration;
+        return clips.some(c =>
+            c.id !== id &&
+            c.trackId === track &&
+            start < (c.startFrame + c.durationInFrames) &&
+            end > c.startFrame
+        );
+    };
+
     const addClip = (type: ClipType, contentOverride?: string) => {
+        const trackId = type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2;
+        const duration = 60;
+        let start = currentFrame;
+
+        // Find next available slot if collision
+        let attempts = 0;
+        while (checkCollision('new', start, duration, trackId) && attempts < 100) {
+            // Move to end of the colliding clip
+            const collidingClip = clips.find(c =>
+                c.trackId === trackId &&
+                start < (c.startFrame + c.durationInFrames) &&
+                (start + duration) > c.startFrame
+            );
+            if (collidingClip) {
+                start = collidingClip.startFrame + collidingClip.durationInFrames;
+            } else {
+                start += 10; // Fallback
+            }
+            attempts++;
+        }
+
         const newClip: Clip = {
             id: Math.random().toString(36).substr(2, 9),
             type,
-            trackId: type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2,
-            startFrame: currentFrame, // Place at playhead
-            durationInFrames: 60,
+            trackId,
+            startFrame: start, // Place at valid spot
+            durationInFrames: duration,
             width: type === 'code' ? 600 : undefined,
             height: type === 'code' ? 400 : undefined,
             x: type === 'code' ? 340 : undefined,
@@ -218,16 +249,41 @@ export default function Editor() {
     }
 
     const handleClipMove = (clipId: string, newStartFrame: number, newTrackId: number) => {
+        const clip = clips.find(c => c.id === clipId);
+        if (!clip) return;
+
+        const start = Math.max(0, newStartFrame);
+
+        // Check collision
+        if (checkCollision(clipId, start, clip.durationInFrames, newTrackId)) {
+            return;
+        }
+
         setClips(clips.map(c => {
             if (c.id === clipId) {
                 return {
                     ...c,
-                    startFrame: Math.max(0, newStartFrame),
+                    startFrame: start,
                     trackId: newTrackId
                 };
             }
             return c;
         }));
+    };
+
+    const handleClipResize = (clipId: string, newStartFrame: number, newDuration: number) => {
+        const clip = clips.find(c => c.id === clipId);
+        if (!clip) return;
+
+        const start = Math.max(0, newStartFrame);
+        const duration = Math.max(1, newDuration);
+
+        // Check collision
+        if (checkCollision(clipId, start, duration, clip.trackId)) {
+            return;
+        }
+
+        setClips(clips.map(c => (c.id === clipId ? { ...c, startFrame: start, durationInFrames: duration } : c)));
     };
 
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
@@ -970,9 +1026,7 @@ export default function Editor() {
                     onSeek={handleSeek}
                     onClipClick={id => setSelectedClipId(id)}
                     onClipMove={handleClipMove}
-                    onClipResize={(clipId, start, duration) => {
-                        setClips(clips.map(c => (c.id === clipId ? { ...c, startFrame: start, durationInFrames: duration } : c)));
-                    }}
+                    onClipResize={handleClipResize}
                     onAddTrack={handleAddTrack}
                     onUpdateTrackName={handleTrackNameChange}
                     onRemoveTrack={handleRemoveTrack}
