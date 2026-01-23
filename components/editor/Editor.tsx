@@ -186,7 +186,7 @@ export default function Editor() {
             ),
             title: `New ${contentOverride || type}`,
             style: type === 'shape' ? { backgroundColor: '#ffffff' } : {},
-            animation: { type: 'fade', duration: 15 }, // Default animation
+            animation: { type: 'none', duration: 0 }, // Default animation
             language: type === 'code' ? 'typescript' : undefined,
             steps: type === 'code' ? [{ code: 'console.log("Hello World");', frameOffset: 0 }] : undefined,
         };
