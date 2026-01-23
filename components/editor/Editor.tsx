@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect } from 'react';
+import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { ResultVideo } from '@/remotion/ResultVideo';
 import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@/components/ui/card';
@@ -142,6 +142,8 @@ export default function Editor() {
     // Dynamic total frames based on content + buffer
     const maxClipEnd = Math.max(0, ...clips.map(c => c.startFrame + c.durationInFrames));
     const totalFrames = Math.max(300, maxClipEnd + 150); // Minimum 10s, or content + 5s buffer
+
+    const inputProps = useMemo(() => ({ clips, primaryColor }), [clips, primaryColor]);
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
 
@@ -1159,7 +1161,7 @@ export default function Editor() {
                                 <Player
                                     ref={onPlayerRef}
                                     component={ResultVideo}
-                                    inputProps={{ clips, primaryColor }}
+                                    inputProps={inputProps}
                                     durationInFrames={totalFrames}
                                     compositionWidth={1280}
                                     compositionHeight={720}
