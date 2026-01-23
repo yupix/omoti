@@ -60,6 +60,7 @@ export default function Editor() {
     const [activeTab, setActiveTab] = useState<'properties' | 'assets'>('properties');
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [localVolume, setLocalVolume] = useState<number | null>(null);
 
     // Fetch assets on load
     useEffect(() => {
@@ -146,6 +147,13 @@ export default function Editor() {
     const inputProps = useMemo(() => ({ clips, primaryColor }), [clips, primaryColor]);
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
+
+    // Sync local volume state when selected clip changes
+    useEffect(() => {
+        if (selectedClip) {
+            setLocalVolume(selectedClip.volume ?? 1);
+        }
+    }, [selectedClip]);
 
     // Auto-switch tab when selecting clip
     useEffect(() => {
@@ -619,6 +627,34 @@ export default function Editor() {
                                                     <span className="text-xs text-muted-foreground w-8 text-right">
                                                         {(selectedClip.playbackRate || 1).toFixed(1)}x
                                                     </span>
+                                                </div>
+                                            </div>
+                                        )}
+
+                                        {(selectedClip.type === 'video' || selectedClip.type === 'audio') && (
+                                            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card">
+                                                <div className="flex items-center justify-between">
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">Volume</Label>
+                                                    <span className="text-xs text-muted-foreground font-mono">
+                                                        {Math.round((localVolume ?? selectedClip.volume ?? 1) * 100)}%
+                                                    </span>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <Volume2 size={14} className="text-muted-foreground" />
+                                                    <input
+                                                        type="range"
+                                                        min="0"
+                                                        max="1"
+                                                        step="0.01"
+                                                        className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                                                        value={localVolume ?? selectedClip.volume ?? 1}
+                                                        onChange={(e) => setLocalVolume(parseFloat(e.target.value))}
+                                                        onPointerUp={() => {
+                                                            if (localVolume !== null) {
+                                                                handleUpdateClip('volume', localVolume);
+                                                            }
+                                                        }}
+                                                    />
                                                 </div>
                                             </div>
                                         )}

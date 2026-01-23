@@ -24,6 +24,7 @@ export interface Clip {
     transitionDuration?: number; // Duration of code transition (frames)
     mediaStartOffset?: number; // Offset in frames from the start of the media file
     playbackRate?: number; // Playback speed (default 1)
+    volume?: number; // Audio volume (0-1, default 1)
 }
 
 export interface CodeStep {

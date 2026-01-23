@@ -144,6 +144,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                     src={clip.content}
                     startFrom={Math.round(clip.mediaStartOffset || 0)}
                     playbackRate={clip.playbackRate || 1}
+                    volume={clip.volume ?? 1}
                     style={{
                         width: '100%',
                         height: '100%',
@@ -213,7 +214,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'audio') {
-        return <Audio src={clip.content} startFrom={Math.round(clip.mediaStartOffset || 0)} playbackRate={clip.playbackRate || 1} />;
+        return <Audio src={clip.content} startFrom={Math.round(clip.mediaStartOffset || 0)} playbackRate={clip.playbackRate || 1} volume={clip.volume ?? 1} />;
     }
 
     return null;
