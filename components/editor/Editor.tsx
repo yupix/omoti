@@ -113,8 +113,8 @@ export default function Editor() {
             const data = await res.json();
 
             // Refresh assets
-            const type = data.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
-                data.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' : 'image';
+            const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
+                data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' : 'image';
 
             const origin = window.location.origin;
             const fullUrl = `${origin}${data.url}`;
@@ -1098,7 +1098,7 @@ export default function Editor() {
                                         id="asset-upload"
                                         className="hidden"
                                         onChange={handleFileUpload}
-                                        accept="image/*,video/*,audio/*"
+                                        accept="image/*,video/*,audio/*,.mkv,.flac,.ogg,.wav,.aac,.m4a,.mov,.webm,.webp,.svg,.bmp,.avif"
                                     />
                                     <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
                                         {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}

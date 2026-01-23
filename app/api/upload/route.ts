@@ -47,7 +47,7 @@ export async function GET() {
 
         const files = fs.readdirSync(uploadDir);
         // Filter likely media files
-        const mediaFiles = files.filter(f => /\.(jpg|jpeg|png|gif|mp4|webm|mp3)$/i.test(f));
+        const mediaFiles = files.filter(f => /\.(jpg|jpeg|png|gif|mp4|webm|mp3|wav|ogg|m4a|aac|flac|mkv|mov|webp|svg|bmp|avif)$/i.test(f));
 
         const fileData = mediaFiles.map(f => ({
             name: f,
