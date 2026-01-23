@@ -7,7 +7,7 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock, Upload, Grid } from 'lucide-react';
+import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock, Upload, Grid, Scissors } from 'lucide-react';
 import { Clip, Track, ClipType, CodeStep } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -406,6 +406,45 @@ export default function Editor() {
         setSelectedClipId(clipId);
     };
 
+    const splitClip = (clipId: string) => {
+        const clip = clips.find(c => c.id === clipId);
+        if (!clip) return;
+
+        // Check if playhead is within clip
+        if (currentFrame <= clip.startFrame || currentFrame >= clip.startFrame + clip.durationInFrames) {
+            alert("Playhead must be inside the clip to split.");
+            return;
+        }
+
+        const splitOffset = currentFrame - clip.startFrame;
+        const firstPartDuration = splitOffset;
+        const secondPartDuration = clip.durationInFrames - splitOffset;
+        const secondPartStart = currentFrame;
+
+        // Validate min duration (e.g., 1 frame)
+        if (firstPartDuration < 1 || secondPartDuration < 1) return;
+
+        // Create second clip
+        const newClip: Clip = {
+            ...clip,
+            id: Math.random().toString(36).substr(2, 9),
+            startFrame: secondPartStart,
+            durationInFrames: secondPartDuration,
+            mediaStartOffset: (clip.mediaStartOffset || 0) + splitOffset,
+            title: `${clip.title} (Part 2)`
+        };
+
+        // Update first clip
+        const updatedClips = clips.map(c =>
+            c.id === clipId
+                ? { ...c, durationInFrames: firstPartDuration, title: `${clip.title} (Part 1)` }
+                : c
+        );
+
+        setClips([...updatedClips, newClip]);
+        setSelectedClipId(newClip.id);
+    };
+
     const handleDuplicateClip = (clipId: string) => {
         const clip = clips.find(c => c.id === clipId);
         if (!clip) return;
@@ -413,9 +452,25 @@ export default function Editor() {
         const newClip = {
             ...clip,
             id: Math.random().toString(36).substr(2, 9),
+            // Try to place after, check collision? 
+            // Original logic was dumb place after.
+            // Let's use checkCollision logic if we wanted, but duplicate usually just pastes.
+            // Revert to original simple paste but maybe shift if colliding?
+            // "Prevent overlap" rule is active.
+            // Let's try to find a spot.
             startFrame: clip.startFrame + clip.durationInFrames, // Place right after
             title: `${clip.title} (Copy)`
         };
+
+        // Simple collision check for duplicate
+        let start = newClip.startFrame;
+        let attempts = 0;
+        while (checkCollision('duplicate', start, newClip.durationInFrames, newClip.trackId) && attempts < 100) {
+            start += 10;
+            attempts++;
+        }
+        newClip.startFrame = start;
+
         setClips([...clips, newClip]);
     };
 
@@ -1176,6 +1231,18 @@ export default function Editor() {
                     style={{ left: contextMenu.x, top: contextMenu.y }}
                 >
                     <div className="p-1 flex flex-col gap-0.5">
+                        <Button
+                            variant="ghost"
+                            size="sm"
+                            className="justify-start h-8 px-2"
+                            onClick={() => {
+                                splitClip(contextMenu.clipId);
+                                setContextMenu(null);
+                            }}
+                        >
+                            <Scissors size={14} className="mr-2" />
+                            Split at Playhead
+                        </Button>
                         <Button
                             variant="ghost"
                             size="sm"

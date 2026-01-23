@@ -1,4 +1,5 @@
 import { AbsoluteFill, Sequence, useCurrentFrame, Audio, Video, interpolate, spring, useVideoConfig } from 'remotion';
+import { Gif } from '@remotion/gif';
 import React from 'react';
 import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
@@ -141,6 +142,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
             <div style={positionStyle}>
                 <Video
                     src={clip.content}
+                    startFrom={Math.round(clip.mediaStartOffset || 0)}
                     style={{
                         width: '100%',
                         height: '100%',
@@ -153,6 +155,28 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'image') {
+        // Handle GIF with restart logic using @remotion/gif
+        if (clip.content.toLowerCase().endsWith('.gif')) {
+            return (
+                <div style={positionStyle}>
+                    <Sequence
+                        from={-Math.round(clip.mediaStartOffset || 0)}
+                        layout="none"
+                    >
+                        <Gif
+                            src={clip.content}
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                objectFit: 'cover',
+                                ...clip.style
+                            }}
+                        />
+                    </Sequence>
+                </div>
+            );
+        }
+
         return (
             <div style={positionStyle}>
                 {/* eslint-disable-next-line @next/next/no-img-element */}
@@ -187,7 +211,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'audio') {
-        return <Audio src={clip.content} />;
+        return <Audio src={clip.content} startFrom={Math.round(clip.mediaStartOffset || 0)} />;
     }
 
     return null;

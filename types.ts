@@ -22,6 +22,7 @@ export interface Clip {
     language?: string; // Programming language for code clips
     steps?: CodeStep[]; // Keyframes for code content
     transitionDuration?: number; // Duration of code transition (frames)
+    mediaStartOffset?: number; // Offset in frames from the start of the media file
 }
 
 export interface CodeStep {
