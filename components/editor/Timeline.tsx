@@ -16,6 +16,7 @@ interface TimelineProps {
     onUpdateTrackName: (id: number, newName: string) => void;
     onRemoveTrack: (id: number) => void;
     onContextMenu: (e: React.MouseEvent, clipId: string) => void;
+    onTimelineDrop?: (e: React.DragEvent, trackId: number, frame: number) => void;
     selectedClipId: string | null;
     totalFrames: number;
 }
@@ -44,6 +45,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     onRemoveTrack,
     onContextMenu,
     onClipResize,
+    onTimelineDrop,
     selectedClipId,
     totalFrames,
 }) => {
@@ -256,7 +258,22 @@ export const Timeline: React.FC<TimelineProps> = ({
                                 {/* Track Lane Content */}
                                 <div className="flex-1 relative">
                                     {/* Grid Lines/Background for track */}
-                                    <div className="absolute inset-0 pointer-events-none" />
+                                    <div
+                                        className="absolute inset-0 z-0"
+                                        onDragOver={(e) => {
+                                            e.preventDefault();
+                                            e.dataTransfer.dropEffect = 'copy';
+                                        }}
+                                        onDrop={(e) => {
+                                            e.preventDefault();
+                                            if (onTimelineDrop) {
+                                                const rect = e.currentTarget.getBoundingClientRect();
+                                                const x = e.clientX - rect.left;
+                                                const frame = Math.max(0, Math.floor(x / FRAME_WIDTH));
+                                                onTimelineDrop(e, track.id, frame);
+                                            }
+                                        }}
+                                    />
 
                                     {/* Clips */}
                                     {clips.filter(c => c.trackId === track.id).map(clip => (

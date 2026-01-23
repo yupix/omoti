@@ -28,8 +28,23 @@ const INITIAL_CLIPS: Clip[] = [
 interface Asset {
     name: string;
     url: string;
-    type: 'image' | 'video';
+    type: 'image' | 'video' | 'audio';
+    duration?: number; // in seconds
 }
+
+const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number> => {
+    return new Promise((resolve) => {
+        const element = type === 'video' ? document.createElement('video') : document.createElement('audio');
+        element.preload = 'metadata';
+        element.onloadedmetadata = () => {
+            resolve(element.duration);
+        };
+        element.onerror = () => {
+            resolve(0);
+        };
+        element.src = url;
+    });
+};
 
 export default function Editor() {
     const [primaryColor, setPrimaryColor] = useState('#6d28d9');
@@ -50,11 +65,20 @@ export default function Editor() {
     useEffect(() => {
         fetch('/api/upload')
             .then(res => res.json())
-            .then(data => {
+            .then(async (data) => {
                 if (data.files) {
-                    const mapped = data.files.map((f: any) => ({
-                        ...f,
-                        type: f.name.match(/\.(mp4|webm)$/i) ? 'video' : 'image'
+                    const mapped = await Promise.all(data.files.map(async (f: any) => {
+                        const type = f.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
+                            f.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' : 'image';
+                        let duration = 0;
+                        if (type === 'video' || type === 'audio') {
+                            duration = await getMediaDuration(`/uploads/${f.name}`, type);
+                        }
+                        return {
+                            ...f,
+                            type,
+                            duration
+                        };
                     }));
                     setAssets(mapped);
                 }
@@ -81,10 +105,19 @@ export default function Editor() {
             const data = await res.json();
 
             // Refresh assets
+            const type = data.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
+                data.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' : 'image';
+
+            let duration = 0;
+            if (type === 'video' || type === 'audio') {
+                duration = await getMediaDuration(data.url, type);
+            }
+
             const newAsset: Asset = {
                 name: data.name,
                 url: data.url,
-                type: data.name.match(/\.(mp4|webm)$/i) ? 'video' : 'image'
+                type,
+                duration
             };
             setAssets(prev => [...prev, newAsset]);
 
@@ -176,26 +209,46 @@ export default function Editor() {
         );
     };
 
-    const addClip = (type: ClipType, contentOverride?: string) => {
-        const trackId = type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2;
-        const duration = 60;
-        let start = currentFrame;
+    const addClip = (type: ClipType, contentOverride?: string, durationOverride?: number, startFrameOverride?: number, trackIdOverride?: number) => {
+        const trackId = trackIdOverride ?? (type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2);
+        // Default 60 frames (2s), or durationOverride (seconds) * 30fps
+        const duration = durationOverride ? Math.ceil(durationOverride * 30) : 60;
+        let start = startFrameOverride ?? currentFrame;
 
         // Find next available slot if collision
-        let attempts = 0;
-        while (checkCollision('new', start, duration, trackId) && attempts < 100) {
-            // Move to end of the colliding clip
-            const collidingClip = clips.find(c =>
-                c.trackId === trackId &&
-                start < (c.startFrame + c.durationInFrames) &&
-                (start + duration) > c.startFrame
-            );
-            if (collidingClip) {
-                start = collidingClip.startFrame + collidingClip.durationInFrames;
-            } else {
-                start += 10; // Fallback
+        // Only auto-resolve collision if we are using default placement (not explicit drop)
+        if (startFrameOverride === undefined) {
+            let attempts = 0;
+            while (checkCollision('new', start, duration, trackId) && attempts < 100) {
+                // Move to end of the colliding clip
+                const collidingClip = clips.find(c =>
+                    c.trackId === trackId &&
+                    start < (c.startFrame + c.durationInFrames) &&
+                    (start + duration) > c.startFrame
+                );
+                if (collidingClip) {
+                    start = collidingClip.startFrame + collidingClip.durationInFrames;
+                } else {
+                    start += 10; // Fallback
+                }
+                attempts++;
             }
-            attempts++;
+        } else {
+            // Check collision for explicit drop? Maybe just warn or allow overlap?
+            // The requirement was "prevent overlap", so let's enforce checking.
+            if (checkCollision('new', start, duration, trackId)) {
+                // If drop collides, we could reject or shift?
+                // Rejecting is safer for now effectively "no-op" if invalid drop
+                // Or find nearest valid space?
+                // Lets just allow it but maybe shift if possible? 
+                // To keep "prevent overlap" strict, let's reject.
+                // But better UX might be to shift to end of whatever we hit?
+                // For simplicity: reject drop if invalid.
+                if (checkCollision('new', start, duration, trackId)) {
+                    alert("Cannot place clip here: collision detected.");
+                    return;
+                }
+            }
         }
 
         const newClip: Clip = {
@@ -223,6 +276,17 @@ export default function Editor() {
         };
         setClips([...clips, newClip]);
         setSelectedClipId(newClip.id);
+    };
+
+    const handleTimelineDrop = (e: React.DragEvent, trackId: number, frame: number) => {
+        try {
+            const data = JSON.parse(e.dataTransfer.getData('application/omoti-clip'));
+            if (data) {
+                addClip(data.type, data.content, data.duration, frame, trackId);
+            }
+        } catch (err) {
+            console.error('Failed to parse drop data', err);
+        }
     };
 
     const removeClip = () => {
@@ -788,35 +852,91 @@ export default function Editor() {
                                 <div className="pt-4 border-t border-border/50">
                                     <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Add Element</h2>
                                     <div className="grid grid-cols-4 gap-2">
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('text')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('text')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'text' }));
+                                            }}
+                                        >
                                             <FileText size={16} />
                                             <span className="text-[10px]">Text</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('video')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('video')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'video' }));
+                                            }}
+                                        >
                                             <VideoIcon size={16} />
                                             <span className="text-[10px]">Video</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('image')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'image' }));
+                                            }}
+                                        >
                                             <ImageIcon size={16} />
                                             <span className="text-[10px]">Image</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('audio')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('audio')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'audio', content: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' }));
+                                            }}
+                                        >
                                             <Volume2 size={16} />
                                             <span className="text-[10px]">Audio</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('shape', 'rect')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('shape', 'rect')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'shape', content: 'rect' }));
+                                            }}
+                                        >
                                             <Square size={16} />
                                             <span className="text-[10px]">Rect</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('shape', 'circle')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('shape', 'circle')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'shape', content: 'circle' }));
+                                            }}
+                                        >
                                             <Circle size={16} />
                                             <span className="text-[10px]">Circle</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('code')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('code')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'code', content: 'console.log("Hello World");' }));
+                                            }}
+                                        >
                                             <Code2 size={16} />
                                             <span className="text-[10px]">Code</span>
                                         </Button>
-                                        <Button variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10" onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'image', content: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif' }));
+                                            }}
+                                        >
                                             <Smile size={16} />
                                             <span className="text-[10px]">GIF</span>
                                         </Button>
@@ -855,14 +975,14 @@ export default function Editor() {
                                         id="asset-upload"
                                         className="hidden"
                                         onChange={handleFileUpload}
-                                        accept="image/*,video/*"
+                                        accept="image/*,video/*,audio/*"
                                     />
                                     <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
                                         {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}
                                     </div>
                                     <div className="text-center">
                                         <p className="text-xs font-medium text-foreground">Click to Upload</p>
-                                        <p className="text-[10px] text-muted-foreground">Images or Videos</p>
+                                        <p className="text-[10px] text-muted-foreground">Images, Videos or Audio</p>
                                     </div>
                                 </div>
 
@@ -883,12 +1003,24 @@ export default function Editor() {
                                             {assets.map((asset, i) => (
                                                 <div
                                                     key={i}
-                                                    className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all"
-                                                    onClick={() => addClip(asset.type, asset.url)}
-                                                    title={asset.name}
+                                                    draggable
+                                                    onDragStart={(e) => {
+                                                        e.dataTransfer.setData('application/omoti-clip', JSON.stringify({
+                                                            type: asset.type,
+                                                            content: asset.url,
+                                                            duration: asset.duration
+                                                        }));
+                                                    }}
+                                                    className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all cursor-grab active:cursor-grabbing"
+                                                    onClick={() => addClip(asset.type, asset.url, asset.duration)}
+                                                    title={`${asset.name} ${asset.duration ? `(${asset.duration.toFixed(1)}s)` : ''}`}
                                                 >
                                                     {asset.type === 'video' ? (
                                                         <video src={asset.url} className="w-full h-full object-cover pointer-events-none" />
+                                                    ) : asset.type === 'audio' ? (
+                                                        <div className="w-full h-full flex items-center justify-center bg-secondary/50">
+                                                            <Volume2 className="text-muted-foreground" size={24} />
+                                                        </div>
                                                     ) : (
                                                         <img src={asset.url} alt={asset.name} className="w-full h-full object-cover pointer-events-none" />
                                                     )}
@@ -1027,6 +1159,7 @@ export default function Editor() {
                     onClipClick={id => setSelectedClipId(id)}
                     onClipMove={handleClipMove}
                     onClipResize={handleClipResize}
+                    onTimelineDrop={handleTimelineDrop}
                     onAddTrack={handleAddTrack}
                     onUpdateTrackName={handleTrackNameChange}
                     onRemoveTrack={handleRemoveTrack}

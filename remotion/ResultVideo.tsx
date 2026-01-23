@@ -1,4 +1,4 @@
-import { AbsoluteFill, Sequence, useCurrentFrame, Audio, interpolate, spring, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Sequence, useCurrentFrame, Audio, Video, interpolate, spring, useVideoConfig } from 'remotion';
 import React from 'react';
 import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
@@ -133,7 +133,23 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                     </div>
                 </div>
             </div>
-        )
+        );
+    }
+
+    if (clip.type === 'video') {
+        return (
+            <div style={positionStyle}>
+                <Video
+                    src={clip.content}
+                    style={{
+                        width: '100%',
+                        height: '100%',
+                        objectFit: 'cover',
+                        ...clip.style
+                    }}
+                />
+            </div>
+        );
     }
 
     if (clip.type === 'image') {
