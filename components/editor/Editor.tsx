@@ -13,6 +13,9 @@ import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InteractOverlay } from './InteractOverlay';
 import { bundledLanguages } from 'shiki';
+import '@/lib/i18n'; // Initialize i18n
+import { useTranslation } from 'react-i18next';
+import { Globe } from 'lucide-react';
 
 const INITIAL_TRACKS: Track[] = [
     { id: 1, name: 'Overlay Text' },
@@ -47,6 +50,7 @@ const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number>
 };
 
 export default function Editor() {
+    const { t, i18n } = useTranslation();
     const [primaryColor, setPrimaryColor] = useState('#6d28d9');
     const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS); // Static tracks for now
     const [clips, setClips] = useState<Clip[]>(INITIAL_CLIPS);
@@ -589,13 +593,13 @@ export default function Editor() {
                             onClick={() => setActiveTab('properties')}
                             className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'properties' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
                         >
-                            Properties
+                            {t('editor.tabs.properties')}
                         </button>
                         <button
                             onClick={() => setActiveTab('assets')}
                             className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'assets' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
                         >
-                            Assets
+                            {t('editor.tabs.assets')}
                         </button>
                     </div>
 
@@ -605,7 +609,7 @@ export default function Editor() {
                                 {selectedClip ? (
                                     <div className="space-y-4 animate-in slide-in-from-left duration-300">
                                         <div className="flex items-center justify-between">
-                                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">Properties</h2>
+                                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('editor.properties.title')}</h2>
                                             <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:bg-destructive/20" onClick={removeClip}>
                                                 <Trash2 size={14} />
                                             </Button>
@@ -613,7 +617,7 @@ export default function Editor() {
 
                                         {(selectedClip.type === 'video' || selectedClip.type === 'audio' || (selectedClip.type === 'image' && selectedClip.content.toLowerCase().endsWith('.gif'))) && (
                                             <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card">
-                                                <Label className="text-[10px] uppercase text-muted-foreground">Playback Speed (x)</Label>
+                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.playbackSpeed')}</Label>
                                                 <div className="flex items-center gap-2">
                                                     <Input
                                                         type="number"
@@ -634,7 +638,7 @@ export default function Editor() {
                                         {(selectedClip.type === 'video' || selectedClip.type === 'audio') && (
                                             <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card">
                                                 <div className="flex items-center justify-between">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">Volume</Label>
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.volume')}</Label>
                                                     <span className="text-xs text-muted-foreground font-mono">
                                                         {Math.round((localVolume ?? selectedClip.volume ?? 1) * 100)}%
                                                     </span>
@@ -661,11 +665,11 @@ export default function Editor() {
 
                                         <Card className="bg-secondary/20 border-border/40">
                                             <CardHeader className="p-3 pb-0">
-                                                <CardTitle className="text-xs font-medium text-muted-foreground">Content</CardTitle>
+                                                <CardTitle className="text-xs font-medium text-muted-foreground">{t('editor.properties.content')}</CardTitle>
                                             </CardHeader>
                                             <CardContent className="p-3 space-y-3">
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">Label</Label>
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.label')}</Label>
                                                     <Input
                                                         value={selectedClip.title || ''}
                                                         onChange={e => handleUpdateClip('title', e.target.value)}
@@ -673,11 +677,11 @@ export default function Editor() {
                                                     />
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">Value</Label>
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.value')}</Label>
                                                     {selectedClip.type === 'code' ? (
                                                         <div className="space-y-2">
                                                             <div className="space-y-1">
-                                                                <Label className="text-[10px] uppercase text-muted-foreground">Language</Label>
+                                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.language')}</Label>
                                                                 <Select
                                                                     value={selectedClip.language || 'typescript'}
                                                                     onValueChange={(val) => handleUpdateClip('language', val)}
@@ -695,7 +699,7 @@ export default function Editor() {
                                                                 </Select>
                                                             </div>
                                                             <div className="space-y-1">
-                                                                <Label className="text-[10px] uppercase text-muted-foreground">Transition Duration (Frames)</Label>
+                                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.transitionDuration')}</Label>
                                                                 <Input
                                                                     type="number"
                                                                     value={selectedClip.transitionDuration || 24}
@@ -707,8 +711,8 @@ export default function Editor() {
                                                                 {/* Visual Timeline Bar */}
                                                                 <div className="space-y-1">
                                                                     <div className="flex justify-between text-[9px] text-muted-foreground uppercase">
-                                                                        <span>Timeline Preview</span>
-                                                                        <span>{selectedClip.durationInFrames}f</span>
+                                                                        <span>{t('editor.properties.timelinePreview')}</span>
+                                                                        <span>{selectedClip.durationInFrames}{t('editor.frames')}</span>
                                                                     </div>
                                                                     <div className="relative h-6 bg-secondary/50 rounded overflow-hidden border border-border/50">
                                                                         {/* Playhead Position */}
@@ -739,7 +743,7 @@ export default function Editor() {
                                                                 </div>
 
                                                                 <div className="flex items-center justify-between">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Keyframes</Label>
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.keyframes')}</Label>
                                                                     <Button
                                                                         size="sm" variant="secondary" className="h-6 px-2 text-[10px] hover:bg-primary hover:text-primary-foreground"
                                                                         onClick={() => {
@@ -759,7 +763,7 @@ export default function Editor() {
                                                                             handleUpdateClip('steps', newSteps);
                                                                         }}
                                                                     >
-                                                                        <Plus size={12} className="mr-1" /> Add Effect at Playhead
+                                                                        <Plus size={12} className="mr-1" /> {t('editor.properties.addEffect')}
                                                                     </Button>
                                                                 </div>
 
@@ -769,9 +773,9 @@ export default function Editor() {
                                                                             <div className="flex items-start gap-2 mb-1">
                                                                                 <div className="flex-1 space-y-1">
                                                                                     <div className="flex justify-between items-center">
-                                                                                        <Label className="text-[9px] uppercase text-muted-foreground">Start Offset (Frames)</Label>
+                                                                                        <Label className="text-[9px] uppercase text-muted-foreground">{t('editor.properties.startOffset')}</Label>
                                                                                         <span className="text-[9px] font-mono text-muted-foreground bg-primary/10 px-1 rounded">
-                                                                                            Global: {selectedClip.startFrame + step.frameOffset}f
+                                                                                            {t('editor.global')}: {selectedClip.startFrame + step.frameOffset}{t('editor.frames')}
                                                                                         </span>
                                                                                     </div>
                                                                                     <div className="flex gap-1">
@@ -836,7 +840,7 @@ export default function Editor() {
                                                 {(selectedClip.type === 'shape' || selectedClip.type === 'text') && (
                                                     <div className="space-y-3 pt-2 border-t border-border/50">
                                                         <div className="space-y-1">
-                                                            <Label className="text-[10px] uppercase text-muted-foreground">Color</Label>
+                                                            <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.color')}</Label>
                                                             <div className="flex gap-2">
                                                                 <Input
                                                                     type="color"
@@ -850,7 +854,7 @@ export default function Editor() {
                                                         {selectedClip.type === 'text' && (
                                                             <>
                                                                 <div className="space-y-1">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Font Family</Label>
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.fontFamily')}</Label>
                                                                     <Select
                                                                         value={(selectedClip.style?.fontFamily as string) || 'sans-serif'}
                                                                         onValueChange={(val) => handleUpdateStyle('fontFamily', val)}
@@ -869,7 +873,7 @@ export default function Editor() {
                                                                     </Select>
                                                                 </div>
                                                                 <div className="space-y-1">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Font Size (px)</Label>
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.fontSize')}</Label>
                                                                     <Input
                                                                         type="number"
                                                                         value={typeof selectedClip.style?.fontSize === 'string' ? parseInt(selectedClip.style.fontSize) : 80}
@@ -878,7 +882,7 @@ export default function Editor() {
                                                                     />
                                                                 </div>
                                                                 <div className="space-y-1">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">Font Weight</Label>
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.fontWeight')}</Label>
                                                                     <Select
                                                                         value={String(selectedClip.style?.fontWeight || 800)}
                                                                         onValueChange={(val) => handleUpdateStyle('fontWeight', parseInt(val))}
@@ -904,11 +908,11 @@ export default function Editor() {
                                         {/* Animation Card */}
                                         <Card className="bg-secondary/20 border-border/40">
                                             <CardHeader className="p-3 pb-0">
-                                                <CardTitle className="text-xs font-medium text-muted-foreground">Animation (Transition)</CardTitle>
+                                                <CardTitle className="text-xs font-medium text-muted-foreground">{t('editor.properties.animation')}</CardTitle>
                                             </CardHeader>
                                             <CardContent className="p-3 space-y-3">
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">Type</Label>
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.type')}</Label>
                                                     <Select value={selectedClip.animation?.type || 'none'} onValueChange={(val) => handleUpdateAnimation('type', val)}>
                                                         <SelectTrigger className="h-8 text-xs">
                                                             <SelectValue placeholder="None" />
@@ -922,7 +926,7 @@ export default function Editor() {
                                                     </Select>
                                                 </div>
                                                 <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">Duration (Frames)</Label>
+                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.duration')}</Label>
                                                     <Input
                                                         type="number"
                                                         value={selectedClip.animation?.duration || 0}
@@ -935,12 +939,12 @@ export default function Editor() {
 
                                         <Card className="bg-secondary/20 border-border/40">
                                             <CardHeader className="p-3 pb-0">
-                                                <CardTitle className="text-xs font-medium text-muted-foreground">Timing</CardTitle>
+                                                <CardTitle className="text-xs font-medium text-muted-foreground">{t('editor.properties.timing')}</CardTitle>
                                             </CardHeader>
                                             <CardContent className="p-3 space-y-3">
                                                 <div className="grid grid-cols-2 gap-2">
                                                     <div className="space-y-1">
-                                                        <Label className="text-[10px] uppercase text-muted-foreground">Start</Label>
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.start')}</Label>
                                                         <Input
                                                             type="number"
                                                             value={selectedClip.startFrame}
@@ -949,7 +953,7 @@ export default function Editor() {
                                                         />
                                                     </div>
                                                     <div className="space-y-1">
-                                                        <Label className="text-[10px] uppercase text-muted-foreground">Measured</Label>
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.measured')}</Label>
                                                         <Input
                                                             type="number"
                                                             value={selectedClip.durationInFrames}
@@ -964,12 +968,12 @@ export default function Editor() {
                                 ) : (
                                     <div className="flex flex-col items-center justify-center h-48 text-muted-foreground space-y-2 opacity-50">
                                         <Layers size={32} />
-                                        <p className="text-sm">Select a clip to edit</p>
+                                        <p className="text-sm">{t('editor.properties.noSelection')}</p>
                                     </div>
                                 )}
 
                                 <div className="pt-4 border-t border-border/50">
-                                    <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">Add Element</h2>
+                                    <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">{t('editor.addElement')}</h2>
                                     <div className="grid grid-cols-4 gap-2">
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -980,7 +984,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <FileText size={16} />
-                                            <span className="text-[10px]">Text</span>
+                                            <span className="text-[10px]">{t('editor.elements.text')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -991,7 +995,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <VideoIcon size={16} />
-                                            <span className="text-[10px]">Video</span>
+                                            <span className="text-[10px]">{t('editor.elements.video')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -1002,7 +1006,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <ImageIcon size={16} />
-                                            <span className="text-[10px]">Image</span>
+                                            <span className="text-[10px]">{t('editor.elements.image')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -1013,7 +1017,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <Volume2 size={16} />
-                                            <span className="text-[10px]">Audio</span>
+                                            <span className="text-[10px]">{t('editor.elements.audio')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -1024,7 +1028,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <Square size={16} />
-                                            <span className="text-[10px]">Rect</span>
+                                            <span className="text-[10px]">{t('editor.elements.rect')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -1035,7 +1039,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <Circle size={16} />
-                                            <span className="text-[10px]">Circle</span>
+                                            <span className="text-[10px]">{t('editor.elements.circle')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -1046,7 +1050,7 @@ export default function Editor() {
                                             }}
                                         >
                                             <Code2 size={16} />
-                                            <span className="text-[10px]">Code</span>
+                                            <span className="text-[10px]">{t('editor.elements.code')}</span>
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
@@ -1057,13 +1061,13 @@ export default function Editor() {
                                             }}
                                         >
                                             <Smile size={16} />
-                                            <span className="text-[10px]">GIF</span>
+                                            <span className="text-[10px]">{t('editor.elements.gif')}</span>
                                         </Button>
                                     </div>
                                 </div>
 
                                 <div className="pt-4 border-t border-border/50">
-                                    <Label className="text-xs text-muted-foreground mb-2 block">Global Color</Label>
+                                    <Label className="text-xs text-muted-foreground mb-2 block">{t('editor.globalColor')}</Label>
                                     <div className="flex gap-2">
                                         <div className="relative">
                                             <Input
@@ -1100,22 +1104,22 @@ export default function Editor() {
                                         {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}
                                     </div>
                                     <div className="text-center">
-                                        <p className="text-xs font-medium text-foreground">Click to Upload</p>
-                                        <p className="text-[10px] text-muted-foreground">Images, Videos or Audio</p>
+                                        <p className="text-xs font-medium text-foreground">{t('editor.assets.upload.title')}</p>
+                                        <p className="text-[10px] text-muted-foreground">{t('editor.assets.upload.subtitle')}</p>
                                     </div>
                                 </div>
 
                                 {/* Asset Grid */}
                                 <div>
                                     <div className="flex items-center justify-between mb-2">
-                                        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Library</h2>
-                                        <span className="text-[10px] text-muted-foreground">{assets.length} items</span>
+                                        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('editor.assets.library')}</h2>
+                                        <span className="text-[10px] text-muted-foreground">{assets.length} {t('editor.items')}</span>
                                     </div>
 
                                     {assets.length === 0 ? (
                                         <div className="text-center py-8 text-muted-foreground">
                                             <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
-                                            <p className="text-xs">No assets yet</p>
+                                            <p className="text-xs">{t('editor.assets.empty')}</p>
                                         </div>
                                     ) : (
                                         <div className="grid grid-cols-2 gap-2">
@@ -1163,16 +1167,27 @@ export default function Editor() {
                 <main className="flex-1 flex flex-col bg-stone-950 relative overflow-hidden">
                     <header className="h-14 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md z-10">
                         <div className="text-sm text-muted-foreground flex items-center gap-4">
-                            <span>Project: <span className="text-foreground font-medium">New Video 01</span></span>
+                            <span>{t('editor.header.project')}: <span className="text-foreground font-medium">New Video 01</span></span>
                             <div className="h-4 w-px bg-border"></div>
                             <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveProject} title="Save Project">
+                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveProject} title={t('editor.header.save')}>
                                     <Save size={16} />
                                 </Button>
-                                <label className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8" title="Load Project">
+                                <label className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8" title={t('editor.header.load')}>
                                     <FolderOpen size={16} />
                                     <input type="file" className="hidden" accept=".json" onChange={handleLoadProject} />
                                 </label>
+                                <div className="h-4 w-px bg-border"></div>
+                                <Select value={i18n.resolvedLanguage || 'en'} onValueChange={(val) => i18n.changeLanguage(val)}>
+                                    <SelectTrigger className="h-8 w-[90px] text-xs gap-1 px-2 border-none bg-transparent hover:bg-accent focus:ring-0">
+                                        <Globe size={14} className="text-muted-foreground" />
+                                        <SelectValue />
+                                    </SelectTrigger>
+                                    <SelectContent align="end">
+                                        <SelectItem value="en">English</SelectItem>
+                                        <SelectItem value="ja">日本語</SelectItem>
+                                    </SelectContent>
+                                </Select>
                             </div>
                         </div>
                         <Button
@@ -1182,7 +1197,7 @@ export default function Editor() {
                             disabled={isExporting}
                         >
                             {isExporting ? <Loader2 className="mr-2 size-3 animate-spin" /> : <Download className="mr-2 size-3" />}
-                            {isExporting ? 'Exporting...' : 'Export'}
+                            {isExporting ? t('editor.header.exporting') : t('editor.header.export')}
                         </Button>
                     </header>
 
@@ -1306,7 +1321,7 @@ export default function Editor() {
                                 }}
                             >
                                 <Scissors size={14} className="mr-2" />
-                                Split at Playhead
+                                {t('editor.contextMenu.split')}
                             </Button>
                             <Button
                                 variant="ghost"
@@ -1315,7 +1330,7 @@ export default function Editor() {
                                 onClick={() => handleDuplicateClip(contextMenu.clipId)}
                             >
                                 <Copy size={14} className="mr-2" />
-                                Duplicate
+                                {t('editor.contextMenu.duplicate')}
                             </Button>
                             <Button
                                 variant="ghost"
@@ -1327,7 +1342,7 @@ export default function Editor() {
                                 }}
                             >
                                 <Trash2 size={14} className="mr-2" />
-                                Delete
+                                {t('editor.contextMenu.delete')}
                             </Button>
                         </div>
                     </div>

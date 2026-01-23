@@ -3,6 +3,7 @@ import { Clip, Track } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
 import { Plus, X } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 
 interface TimelineProps {
     tracks: Track[];
@@ -49,6 +50,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     selectedClipId,
     totalFrames,
 }) => {
+    const { t } = useTranslation();
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const [dragState, setDragState] = useState<{ id: string; type: DragType; offset: number; initialStart: number; initialDuration: number } | null>(null);
@@ -194,9 +196,9 @@ export const Timeline: React.FC<TimelineProps> = ({
         >
             {/* Toolbar */}
             <div className="h-10 border-b border-border bg-card flex items-center px-4 justify-between flex-shrink-0 z-30 relative">
-                <span className="text-xs text-muted-foreground font-mono">Timeline ({totalFrames} frames)</span>
+                <span className="text-xs text-muted-foreground font-mono">{t('editor.timeline.title')} ({totalFrames} {t('editor.frames')})</span>
                 <div className="text-xs text-muted-foreground">
-                    Scale: {FRAME_WIDTH}px/frame
+                    {t('editor.timeline.scale')}: {FRAME_WIDTH}{t('editor.timeline.pxPerFrame')}
                 </div>
             </div>
 
@@ -376,7 +378,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                     onClick={onAddTrack}
                                 >
                                     <Plus className="size-3 mr-2" />
-                                    Add Track
+                                    {t('editor.timeline.addTrack')}
                                 </Button>
                             </div>
                             <div className="flex-1 bg-transparent" />

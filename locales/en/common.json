@@ -1,0 +1,74 @@
+{
+    "editor": {
+        "tabs": {
+            "properties": "Properties",
+            "assets": "Assets"
+        },
+        "properties": {
+            "title": "Properties",
+            "noSelection": "Select a clip to edit",
+            "playbackSpeed": "Playback Speed (x)",
+            "volume": "Volume",
+            "content": "Content",
+            "label": "Label",
+            "value": "Value",
+            "language": "Language",
+            "transitionDuration": "Transition Duration (Frames)",
+            "timelinePreview": "Timeline Preview",
+            "keyframes": "Keyframes",
+            "addEffect": "Add Effect at Playhead",
+            "startOffset": "Start Offset (Frames)",
+            "color": "Color",
+            "fontFamily": "Font Family",
+            "fontSize": "Font Size (px)",
+            "fontWeight": "Font Weight",
+            "animation": "Animation (Transition)",
+            "type": "Type",
+            "duration": "Duration (Frames)",
+            "timing": "Timing",
+            "start": "Start",
+            "measured": "Measured"
+        },
+        "assets": {
+            "upload": {
+                "title": "Click to Upload",
+                "subtitle": "Images, Videos or Audio"
+            },
+            "library": "Library",
+            "empty": "No assets yet"
+        },
+        "addElement": "Add Element",
+        "globalColor": "Global Color",
+        "header": {
+            "project": "Project",
+            "save": "Save Project",
+            "load": "Load Project",
+            "export": "Export",
+            "exporting": "Exporting..."
+        },
+        "elements": {
+            "text": "Text",
+            "video": "Video",
+            "image": "Image",
+            "audio": "Audio",
+            "rect": "Rect",
+            "circle": "Circle",
+            "code": "Code",
+            "gif": "GIF"
+        },
+        "global": "Global",
+        "frames": "f",
+        "items": "items",
+        "contextMenu": {
+            "split": "Split at Playhead",
+            "duplicate": "Duplicate",
+            "delete": "Delete"
+        },
+        "timeline": {
+            "title": "Timeline",
+            "scale": "Scale",
+            "pxPerFrame": "px/frame",
+            "addTrack": "Add Track"
+        }
+    }
+}

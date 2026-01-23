@@ -1,0 +1,74 @@
+{
+    "editor": {
+        "tabs": {
+            "properties": "プロパティ",
+            "assets": "素材"
+        },
+        "properties": {
+            "title": "プロパティ",
+            "noSelection": "クリップを選択してください",
+            "playbackSpeed": "再生速度 (x)",
+            "volume": "音量",
+            "content": "コンテンツ",
+            "label": "ラベル",
+            "value": "値",
+            "language": "言語",
+            "transitionDuration": "トランジション時間 (フレーム)",
+            "timelinePreview": "タイムラインプレビュー",
+            "keyframes": "キーフレーム",
+            "addEffect": "エフェクトを追加",
+            "startOffset": "開始オフセット (フレーム)",
+            "color": "色",
+            "fontFamily": "フォント",
+            "fontSize": "フォントサイズ (px)",
+            "fontWeight": "太さ",
+            "animation": "アニメーション (トランジション)",
+            "type": "種類",
+            "duration": "時間 (フレーム)",
+            "timing": "タイミング",
+            "start": "開始",
+            "measured": "長さ"
+        },
+        "assets": {
+            "upload": {
+                "title": "クリックしてアップロード",
+                "subtitle": "画像、動画、音声"
+            },
+            "library": "ライブラリ",
+            "empty": "素材がありません"
+        },
+        "addElement": "要素を追加",
+        "globalColor": "グローバルカラー",
+        "header": {
+            "project": "プロジェクト",
+            "save": "プロジェクトを保存",
+            "load": "プロジェクトを読み込む",
+            "export": "書き出し",
+            "exporting": "書き出し中..."
+        },
+        "elements": {
+            "text": "テキスト",
+            "video": "動画",
+            "image": "画像",
+            "audio": "音声",
+            "rect": "四角形",
+            "circle": "円",
+            "code": "コード",
+            "gif": "GIF"
+        },
+        "global": "全体",
+        "frames": "f",
+        "items": "個",
+        "contextMenu": {
+            "split": "再生ヘッドで分割",
+            "duplicate": "複製",
+            "delete": "削除"
+        },
+        "timeline": {
+            "title": "タイムライン",
+            "scale": "スケール",
+            "pxPerFrame": "px/フレーム",
+            "addTrack": "トラックを追加"
+        }
+    }
+}
