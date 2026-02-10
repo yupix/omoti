@@ -28,10 +28,11 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
 
     // Initialize/Load
     useEffect(() => {
-        // If we have an instance already, set it immediately to avoid visual lag if possible, 
-        // but strictly this runs after mount so hydration is safe.
+        // If we have an instance already, check if it has the required language before setting
         if (highlighterInstance && !highlighter) {
-            setHighlighter(highlighterInstance);
+            if (highlighterInstance.getLoadedLanguages().includes(language as any)) {
+                setHighlighter(highlighterInstance);
+            }
         }
 
         if (handleRef.current === null) {
@@ -45,7 +46,7 @@ export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
                 if (!highlighterPromise) {
                     highlighterPromise = createHighlighter({
                         themes: ['dark-plus', theme as any],
-                        langs: ['javascript', 'typescript', language as any],
+                        langs: ['javascript', 'typescript', 'css', 'html', 'json', 'tsx', 'jsx', 'bash', 'yaml', language as any],
                     });
                 }
 

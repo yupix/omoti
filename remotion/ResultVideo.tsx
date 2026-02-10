@@ -18,7 +18,7 @@ import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadBebasNeue } from "@remotion/google-fonts/BebasNeue";
 import { loadFont as loadPermanentMarker } from "@remotion/google-fonts/PermanentMarker";
 
-// Preload common fonts
+// Preload common fonts with optimizations
 loadNotoSansJP();
 loadNotoSerifJP();
 loadZenKakuGothicNew();
@@ -143,21 +143,51 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
         return (
             <div style={positionStyle}>
                 <div style={{
-                    borderRadius: '16px',
+                    borderRadius: '12px',
                     overflow: 'hidden',
-                    boxShadow: '0 10px 30px rgba(0,0,0,0.5)',
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
                     border: '1px solid rgba(255,255,255,0.1)',
                     minWidth: '300px',
                     width: '100%', // Fill the container
                     height: '100%', // Fill the container
-                    fontSize: '24px',
                     backgroundColor: '#1e1e1e', // Fallback/Basis
-                    display: 'flex', // Ensure content alignment
-                    alignItems: 'center', // Vertically center content? Or top? Usually code is top. Let's start with default/stretch.
-                    // Actually, if height is 100%, we probably want the inner padding div to just flow.
+                    display: 'flex',
+                    flexDirection: 'column',
                     ...clip.style
                 }}>
-                    <div style={{ padding: '30px', width: '100%' }}>
+                    {/* Window Header */}
+                    <div style={{
+                        height: '36px',
+                        backgroundColor: 'rgba(255,255,255,0.05)',
+                        borderBottom: '1px solid rgba(255,255,255,0.05)',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 12px',
+                        gap: '8px',
+                        flexShrink: 0
+                    }}>
+                        {/* Mac Dots */}
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ff5f56' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ffbd2e' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#27c93f' }} />
+
+                        {/* Filename */}
+                        <div style={{
+                            flex: 1,
+                            textAlign: 'center',
+                            fontSize: '13px',
+                            color: 'rgba(255,255,255,0.6)',
+                            fontFamily: 'Inter, sans-serif',
+                            marginRight: '38px', // Visual balance
+                            whiteSpace: 'nowrap',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis'
+                        }}>
+                            {clip.title}
+                        </div>
+                    </div>
+
+                    <div style={{ flex: 1, padding: '20px', width: '100%', overflow: 'hidden', fontSize: '20px' }}>
                         <CodeClipRenderer clip={clip} />
                     </div>
                 </div>
@@ -253,6 +283,68 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
         return (
             <div style={positionStyle}>
                 <FlowRenderer clip={clip} />
+            </div>
+        );
+    }
+
+    if (clip.type === 'browser') {
+        return (
+            <div style={positionStyle}>
+                <div style={{
+                    borderRadius: '12px',
+                    overflow: 'hidden',
+                    boxShadow: '0 20px 50px rgba(0,0,0,0.5)',
+                    border: '1px solid rgba(255,255,255,0.1)',
+                    width: '100%',
+                    height: '100%',
+                    backgroundColor: '#ffffff',
+                    display: 'flex',
+                    flexDirection: 'column',
+                    ...clip.style
+                }}>
+                    {/* Browser Header */}
+                    <div style={{
+                        height: '36px',
+                        backgroundColor: '#f1f1f1',
+                        borderBottom: '1px solid #ddd',
+                        display: 'flex',
+                        alignItems: 'center',
+                        padding: '0 12px',
+                        gap: '8px',
+                        flexShrink: 0
+                    }}>
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ff5f56' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#ffbd2e' }} />
+                        <div style={{ width: 10, height: 10, borderRadius: '50%', backgroundColor: '#27c93f' }} />
+                        {/* Fake Address Bar */}
+                        <div style={{
+                            flex: 1,
+                            backgroundColor: '#fff',
+                            borderRadius: '4px',
+                            height: '24px',
+                            marginLeft: '10px',
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '0 8px',
+                            fontSize: '11px',
+                            color: '#666',
+                            border: '1px solid #e0e0e0',
+                            fontFamily: 'system-ui, sans-serif'
+                        }}>
+                            {clip.title || 'localhost:3000'}
+                        </div>
+                    </div>
+                    {/* Content */}
+                    <div style={{ flex: 1, position: 'relative', backgroundColor: 'white' }}>
+                        <iframe
+                            srcDoc={clip.content.startsWith('<') ? clip.content : undefined}
+                            src={!clip.content.startsWith('<') ? clip.content : undefined}
+                            style={{ width: '100%', height: '100%', border: 'none' }}
+                            title="Browser Preview"
+                            sandbox="allow-scripts"
+                        />
+                    </div>
+                </div>
             </div>
         );
     }

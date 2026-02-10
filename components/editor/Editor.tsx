@@ -18,6 +18,8 @@ import { readPsd } from 'ag-psd';
 import { getAIVoicePresets } from '@/lib/aivoice';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssetsPanel } from './AssetsPanel';
+import { AiGeneratorDialog } from './AiGeneratorDialog';
+import { Sparkles } from 'lucide-react';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
 import { Asset, getMediaDuration } from './utils';
@@ -641,6 +643,7 @@ export default function Editor() {
         e.target.value = '';
     };
 
+
     const handleExport = async () => {
         try {
             setIsExporting(true);
@@ -672,6 +675,33 @@ export default function Editor() {
             setIsExporting(false);
         }
     };
+
+    const [isAiOpen, setIsAiOpen] = useState(false);
+
+    const handleAiGenerate = (newClips: Clip[]) => {
+        if (confirm("This will replace your current timeline. Continue?")) {
+            // Dynamically generate tracks based on clips
+            const usedTrackIds = Array.from(new Set(newClips.map(c => c.trackId)));
+            // Ensure standard tracks exist if not used? No, just what's needed.
+            // Actually, let's keep it clean.
+
+            const newTracks: Track[] = usedTrackIds.sort((a, b) => a - b).map(id => {
+                let name = `Track ${id}`;
+                if (id === 1) name = 'Text/Subtitles';
+                else if (id === 2) name = 'Characters';
+                else if (id === 3) name = 'Audio/BGM';
+                else if (id === 10) name = 'Background';
+                else if (id >= 4 && id < 10) name = `Overlay ${id - 3}`;
+
+                return { id, name };
+            });
+
+            setTracks(newTracks);
+            setClips(newClips);
+            alert("Video generated successfully!");
+        }
+    };
+
 
     return (
         <div className="flex flex-col h-screen w-full bg-background text-foreground overflow-hidden font-sans">
@@ -706,7 +736,7 @@ export default function Editor() {
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">
                         {activeTab === 'properties' ? (
                             <PropertiesPanel
-                                selectedClip={selectedClip}
+                                selectedClip={selectedClip || null}
                                 currentFrame={currentFrame}
                                 localVolume={localVolume}
                                 setLocalVolume={setLocalVolume}
@@ -779,6 +809,15 @@ export default function Editor() {
                             {isExporting ? <Loader2 className="mr-2 size-3 animate-spin" /> : <Download className="mr-2 size-3" />}
                             {isExporting ? t('editor.header.exporting') : t('editor.header.export')}
                         </Button>
+                        <Button
+                            className="ml-2 h-8 bg-purple-600 hover:bg-purple-700 text-white border border-purple-400/20 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                            size="sm"
+                            onClick={() => setIsAiOpen(true)}
+                        >
+                            <Sparkles className="mr-2 size-3" />
+                            AI Create
+                        </Button>
+
                     </header>
 
                     <div className="flex-1 flex flex-col relative min-h-0">
@@ -928,6 +967,14 @@ export default function Editor() {
                     </div>
                 )
             }
+
+
+            <AiGeneratorDialog
+                open={isAiOpen}
+                onOpenChange={setIsAiOpen}
+                onGenerate={handleAiGenerate}
+                availableTachies={assets.filter(a => a.type === 'tachie').map(a => ({ name: a.name, url: a.url }))}
+            />
         </div >
     );
 }

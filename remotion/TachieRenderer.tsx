@@ -15,28 +15,56 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
     const [handle] = useState(() => delayRender(`Loading Tachie: ${clip.title}`));
 
     useEffect(() => {
+        let isMounted = true;
         const loadPsd = async () => {
             if (psdCache[clip.content]) {
-                setPsd(psdCache[clip.content]);
-                continueRender(handle);
+                if (isMounted) {
+                    setPsd(psdCache[clip.content]);
+                    continueRender(handle);
+                }
                 return;
             }
 
             try {
+                console.log('Fetching PSD from:', clip.content);
                 const response = await fetch(clip.content);
+                if (!response.ok) {
+                    throw new Error(`Failed to fetch PSD: ${response.status} ${response.statusText}`);
+                }
                 const buffer = await response.arrayBuffer();
+
+                // Check for valid PSD signature (8BPS)
+                const view = new DataView(buffer);
+                // '8' = 56, 'B' = 66, 'P' = 80, 'S' = 83 in ASCII?
+                // Actually readPsd throws if invalid.
+                // But let's log if it looks like textual/html
+                if (buffer.byteLength < 4) throw new Error('File too small');
+
+                // Simple signature check: 8BPS
+                const sig = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
+                if (sig !== '8BPS') {
+                    // Try to read as text to see what we got
+                    const text = new TextDecoder().decode(buffer.slice(0, 100));
+                    throw new Error(`Invalid PSD signature: '${sig}' (Content starts with: ${text})`);
+                }
+
                 const parsedPsd = readPsd(buffer);
                 psdCache[clip.content] = parsedPsd;
-                setPsd(parsedPsd);
-                continueRender(handle);
-            } catch (err) {
+                if (isMounted) {
+                    setPsd(parsedPsd);
+                    continueRender(handle);
+                }
+            } catch (err: any) {
                 console.error('Failed to load PSD:', err);
-                setError('Failed to load PSD');
-                continueRender(handle);
+                if (isMounted) {
+                    setError(`Failed to load PSD: ${err.message}`);
+                    continueRender(handle);
+                }
             }
         };
 
         loadPsd();
+        return () => { isMounted = false; };
     }, [clip.content, handle]);
 
     const renderedImage = useMemo(() => {

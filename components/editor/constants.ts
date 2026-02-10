@@ -1,107 +1,421 @@
 import { Clip, Track } from '@/types';
 
 export const INITIAL_TRACKS: Track[] = [
-    { id: 1, name: 'Foreground' },
-    { id: 2, name: 'Main' },
-    { id: 3, name: 'Background' },
+    { id: 1, name: 'Text/Subtitles' },
+    { id: 2, name: 'Characters' },
+    { id: 3, name: 'Audio/BGM' },
+    { id: 4, name: 'Overlays' },
 ];
 
 export const INITIAL_CLIPS: Clip[] = [
-    // Background
     {
-        id: 'bg-gradient', type: 'shape', trackId: 3, startFrame: 0, durationInFrames: 510,
-        content: 'rect', title: 'Background',
-        x: 0, y: 0, width: 1280, height: 720,
-        style: { background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' },
-        animation: { type: 'none', duration: 0 }
-    },
-
-    // Scene 1: Introduction (Akane)
-    {
-        id: 'intro-title', type: 'text', trackId: 1, startFrame: 0, durationInFrames: 60,
-        content: 'React入門講座', title: 'Project Title',
-        x: 340, y: 200, width: 600, height: 100,
-        style: { color: '#61dafb', fontSize: '80px', fontFamily: 'Kaisei Tokumin', fontWeight: 'bold', textAlign: 'center' },
-        animation: { type: 'pop', duration: 30 }
-    },
-    {
-        id: 's1-akane', type: 'tachie', trackId: 2, startFrame: 30, durationInFrames: 120,
-        content: '/uploads/1770692241459-_____SD___.psd', title: 'Akane (a)',
-        x: -50, y: 150, width: 600, height: 600,
-        animation: { type: 'slide', duration: 30 }
+        "id": "bg-gradient",
+        "type": "shape",
+        "trackId": 3,
+        "startFrame": 0,
+        "durationInFrames": 690,
+        "content": "rect",
+        "title": "Background",
+        "x": 0,
+        "y": 0,
+        "width": 1280,
+        "height": 720,
+        "style": {
+            "background": "linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)"
+        },
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
     },
     {
-        id: 's1-sub', type: 'text', trackId: 1, startFrame: 40, durationInFrames: 110,
-        content: 'こんにちは！茜です。\n今日はReactの基礎を解説するよ！', title: 'Subtitle 1',
-        x: 400, y: 550, width: 700, height: 120,
-        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px' },
-        animation: { type: 'fade', duration: 15 }
+        "id": "title",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 0,
+        "durationInFrames": 60,
+        "content": "React入門",
+        "title": "Main Title",
+        "x": 340,
+        "y": 100,
+        "width": 600,
+        "height": 100,
+        "style": {
+            "color": "#61dafb",
+            "fontSize": "80px",
+            "fontWeight": "bold",
+            "textAlign": "center",
+            "fontFamily": "Inter"
+        },
+        "animation": {
+            "type": "pop",
+            "duration": 30
+        }
     },
-
-    // Scene 2: Aoi explains Components
     {
-        id: 's2-aoi', type: 'tachie', trackId: 2, startFrame: 150, durationInFrames: 120,
-        content: '/uploads/1770692241459-_____SD___.psd', title: 'Aoi (aoi)',
-        x: 730, y: 150, width: 600, height: 600,
-        animation: { type: 'slide', duration: 30 }
+        "id": "audio-0",
+        "type": "audio",
+        "trackId": 3,
+        "startFrame": 0,
+        "durationInFrames": 90,
+        "content": "http://localhost:8000/static/audio/95c3f875-14ab-4a63-bd7d-2dfa4f861602.wav",
+        "title": "Voice 1",
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
     },
     {
-        id: 's2-sub', type: 'text', trackId: 1, startFrame: 160, durationInFrames: 110,
-        content: '葵だよ！Reactは「コンポーネント」を\n組み合わせて画面を作るのが特徴なんだ。', title: 'Subtitle 2',
-        x: 200, y: 550, width: 700, height: 120,
-        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px' },
-        animation: { type: 'fade', duration: 15 }
+        "id": "tachie-0",
+        "type": "tachie",
+        "trackId": 2,
+        "startFrame": 0,
+        "durationInFrames": 105,
+        "content": "/uploads/1770692241459-_____SD___.psd",
+        "title": "Akane",
+        "x": 50,
+        "y": 150,
+        "width": 600,
+        "height": 600,
+        "animation": {
+            "type": "slide",
+            "duration": 20
+        }
     },
-
-    // Scene 3: Code Example
     {
-        id: 's3-code', type: 'code', trackId: 3, startFrame: 270, durationInFrames: 120,
-        content: 'function Welcome() {\n  return <h1>Hello, React!</h1>;\n}', title: 'React Code',
-        x: 340, y: 150, width: 600, height: 350,
-        language: 'tsx',
-        steps: [
-            { code: 'function Welcome() {\n  return <h1>Hello, React!</h1>;\n}', frameOffset: 0 }
+        "id": "sub-0",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 0,
+        "durationInFrames": 90,
+        "content": "こんにちは！おもちエディタへようこそ。",
+        "title": "Subtitle",
+        "x": 290,
+        "y": 560,
+        "width": 900,
+        "height": 120,
+        "style": {
+            "color": "#ffffff",
+            "fontSize": "32px",
+            "fontFamily": "Noto Sans JP",
+            "backgroundColor": "rgba(0,0,0,0.7)",
+            "borderRadius": "16px",
+            "padding": "24px",
+            "textAlign": "center",
+            "boxShadow": "0 4px 6px rgba(0,0,0,0.3)"
+        },
+        "animation": {
+            "type": "fade",
+            "duration": 10
+        }
+    },
+    {
+        "id": "audio-1",
+        "type": "audio",
+        "trackId": 3,
+        "startFrame": 105,
+        "durationInFrames": 90,
+        "content": "http://localhost:8000/static/audio/3f745680-a079-4af7-babd-bc9a1ace1c88.wav",
+        "title": "Voice 2",
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "tachie-1",
+        "type": "tachie",
+        "trackId": 2,
+        "startFrame": 105,
+        "durationInFrames": 105,
+        "content": "/uploads/1770692241459-_____SD___.psd",
+        "title": "Akane",
+        "x": 50,
+        "y": 150,
+        "width": 600,
+        "height": 600,
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "sub-1",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 105,
+        "durationInFrames": 90,
+        "content": "今日はReactの基礎について解説していくよ。",
+        "title": "Subtitle",
+        "x": 290,
+        "y": 560,
+        "width": 900,
+        "height": 120,
+        "style": {
+            "color": "#ffffff",
+            "fontSize": "32px",
+            "fontFamily": "Noto Sans JP",
+            "backgroundColor": "rgba(0,0,0,0.7)",
+            "borderRadius": "16px",
+            "padding": "24px",
+            "textAlign": "center",
+            "boxShadow": "0 4px 6px rgba(0,0,0,0.3)"
+        },
+        "animation": {
+            "type": "fade",
+            "duration": 10
+        }
+    },
+    {
+        "id": "audio-2",
+        "type": "audio",
+        "trackId": 3,
+        "startFrame": 210,
+        "durationInFrames": 90,
+        "content": "http://localhost:8000/static/audio/0abff431-b832-476b-897a-fe39a23240d0.wav",
+        "title": "Voice 3",
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "tachie-2",
+        "type": "tachie",
+        "trackId": 2,
+        "startFrame": 210,
+        "durationInFrames": 105,
+        "content": "/uploads/1770692241459-_____SD___.psd",
+        "title": "Akane",
+        "x": 50,
+        "y": 150,
+        "width": 600,
+        "height": 600,
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "sub-2",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 210,
+        "durationInFrames": 90,
+        "content": "Reactは、コンポーネントという部品を組み合わせて画面を作るんだ。",
+        "title": "Subtitle",
+        "x": 290,
+        "y": 560,
+        "width": 900,
+        "height": 120,
+        "style": {
+            "color": "#ffffff",
+            "fontSize": "32px",
+            "fontFamily": "Noto Sans JP",
+            "backgroundColor": "rgba(0,0,0,0.7)",
+            "borderRadius": "16px",
+            "padding": "24px",
+            "textAlign": "center",
+            "boxShadow": "0 4px 6px rgba(0,0,0,0.3)"
+        },
+        "animation": {
+            "type": "fade",
+            "duration": 10
+        }
+    },
+    {
+        "id": "code-demo",
+        "type": "code",
+        "trackId": 4,
+        "startFrame": 210,
+        "durationInFrames": 240,
+        "content": "function App() {\n  return <h1>Hello</h1>;\n}",
+        "title": "Code Sample",
+        "x": 600,
+        "y": 200,
+        "width": 500,
+        "height": 300,
+        "language": "tsx",
+        "steps": [
+            {
+                "code": "function App() {\n  return <h1>Hello</h1>;\n}",
+                "frameOffset": 0
+            }
         ],
-        animation: { type: 'fade', duration: 20 }
+        "animation": {
+            "type": "pop",
+            "duration": 20
+        }
     },
     {
-        id: 's3-sub', type: 'text', trackId: 1, startFrame: 270, durationInFrames: 120,
-        content: 'こんな風に、HTMLみたいな見た目を\nJavaScriptで書けるのが便利だよね。', title: 'Subtitle 3',
-        x: 340, y: 550, width: 600, height: 120,
-        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px', textAlign: 'center' },
-        animation: { type: 'fade', duration: 15 }
+        "id": "audio-3",
+        "type": "audio",
+        "trackId": 3,
+        "startFrame": 315,
+        "durationInFrames": 90,
+        "content": "http://localhost:8000/static/audio/8f19f1c1-0fd7-4a30-89be-0d47c69f5dea.wav",
+        "title": "Voice 4",
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
     },
-
-    // Scene 4: Flow Chart
     {
-        id: 's4-flow', type: 'flow', trackId: 3, startFrame: 390, durationInFrames: 120,
-        content: 'Component Tree', title: 'Component Flow',
-        x: 340, y: 150, width: 600, height: 350,
-        nodes: [
-            { id: 'app', data: { label: 'App' }, position: { x: 250, y: 20 }, style: { background: '#61dafb', color: '#000', fontWeight: 'bold' } },
-            { id: 'header', data: { label: 'Header' }, position: { x: 100, y: 150 }, style: { background: '#fff', color: '#000' } },
-            { id: 'main', data: { label: 'Main' }, position: { x: 400, y: 150 }, style: { background: '#fff', color: '#000' } },
-        ],
-        edges: [
-            { id: 'e1', source: 'app', target: 'header', animated: true },
-            { id: 'e2', source: 'app', target: 'main', animated: true },
-        ],
-        animation: { type: 'fade', duration: 20 }
+        "id": "tachie-3",
+        "type": "tachie",
+        "trackId": 2,
+        "startFrame": 315,
+        "durationInFrames": 105,
+        "content": "/uploads/1770692241459-_____SD___.psd",
+        "title": "Akane",
+        "x": 50,
+        "y": 150,
+        "width": 600,
+        "height": 600,
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
     },
-
-    // Scene 5: Outro
     {
-        id: 's5-both-text', type: 'text', trackId: 1, startFrame: 450, durationInFrames: 60,
-        content: '一緒にマスターしよう！', title: 'Closing',
-        x: 340, y: 250, width: 600, height: 100,
-        style: { color: '#ffffff', fontSize: '48px', fontFamily: 'Kaisei Tokumin', textAlign: 'center', fontWeight: 'bold' },
-        animation: { type: 'pop', duration: 20 }
+        "id": "sub-3",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 315,
+        "durationInFrames": 90,
+        "content": "例えば、ボタンやヘッダーを一つの部品として定義するよ。",
+        "title": "Subtitle",
+        "x": 290,
+        "y": 560,
+        "width": 900,
+        "height": 120,
+        "style": {
+            "color": "#ffffff",
+            "fontSize": "32px",
+            "fontFamily": "Noto Sans JP",
+            "backgroundColor": "rgba(0,0,0,0.7)",
+            "borderRadius": "16px",
+            "padding": "24px",
+            "textAlign": "center",
+            "boxShadow": "0 4px 6px rgba(0,0,0,0.3)"
+        },
+        "animation": {
+            "type": "fade",
+            "duration": 10
+        }
     },
-
-    // Global Audio
     {
-        id: 'bg-music', type: 'audio', trackId: 3, startFrame: 0, durationInFrames: 510,
-        content: 'https://actions.google.com/sounds/v1/science_fiction/stinger_heavy_transition.ogg', title: 'BGM',
-        animation: { type: 'none', duration: 0 }
+        "id": "audio-4",
+        "type": "audio",
+        "trackId": 3,
+        "startFrame": 420,
+        "durationInFrames": 90,
+        "content": "http://localhost:8000/static/audio/6542a8ae-e9c9-487e-b4b5-98e10a16419c.wav",
+        "title": "Voice 5",
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "tachie-4",
+        "type": "tachie",
+        "trackId": 2,
+        "startFrame": 420,
+        "durationInFrames": 105,
+        "content": "/uploads/1770692241459-_____SD___.psd",
+        "title": "Akane",
+        "x": 50,
+        "y": 150,
+        "width": 600,
+        "height": 600,
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "sub-4",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 420,
+        "durationInFrames": 90,
+        "content": "それらを並べるだけで、複雑な画面も簡単に作れちゃうんだ。",
+        "title": "Subtitle",
+        "x": 290,
+        "y": 560,
+        "width": 900,
+        "height": 120,
+        "style": {
+            "color": "#ffffff",
+            "fontSize": "32px",
+            "fontFamily": "Noto Sans JP",
+            "backgroundColor": "rgba(0,0,0,0.7)",
+            "borderRadius": "16px",
+            "padding": "24px",
+            "textAlign": "center",
+            "boxShadow": "0 4px 6px rgba(0,0,0,0.3)"
+        },
+        "animation": {
+            "type": "fade",
+            "duration": 10
+        }
+    },
+    {
+        "id": "audio-5",
+        "type": "audio",
+        "trackId": 3,
+        "startFrame": 525,
+        "durationInFrames": 90,
+        "content": "http://localhost:8000/static/audio/f376f6bd-675d-4784-9f8a-157eef9f7f9d.wav",
+        "title": "Voice 6",
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "tachie-5",
+        "type": "tachie",
+        "trackId": 2,
+        "startFrame": 525,
+        "durationInFrames": 105,
+        "content": "/uploads/1770692241459-_____SD___.psd",
+        "title": "Akane",
+        "x": 50,
+        "y": 150,
+        "width": 600,
+        "height": 600,
+        "animation": {
+            "type": "none",
+            "duration": 0
+        }
+    },
+    {
+        "id": "sub-5",
+        "type": "text",
+        "trackId": 1,
+        "startFrame": 525,
+        "durationInFrames": 90,
+        "content": "便利そうだよね！これから一緒に学んでいこう！",
+        "title": "Subtitle",
+        "x": 290,
+        "y": 560,
+        "width": 900,
+        "height": 120,
+        "style": {
+            "color": "#ffffff",
+            "fontSize": "32px",
+            "fontFamily": "Noto Sans JP",
+            "backgroundColor": "rgba(0,0,0,0.7)",
+            "borderRadius": "16px",
+            "padding": "24px",
+            "textAlign": "center",
+            "boxShadow": "0 4px 6px rgba(0,0,0,0.3)"
+        },
+        "animation": {
+            "type": "fade",
+            "duration": 10
+        }
     }
 ];
