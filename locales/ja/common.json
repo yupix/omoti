@@ -55,7 +55,8 @@
             "rect": "四角形",
             "circle": "円",
             "code": "コード",
-            "gif": "GIF"
+            "gif": "GIF",
+            "flow": "フロー"
         },
         "global": "全体",
         "frames": "f",

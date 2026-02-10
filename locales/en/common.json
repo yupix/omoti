@@ -55,7 +55,8 @@
             "rect": "Rect",
             "circle": "Circle",
             "code": "Code",
-            "gif": "GIF"
+            "gif": "GIF",
+            "flow": "Flow"
         },
         "global": "Global",
         "frames": "f",

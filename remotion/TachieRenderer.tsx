@@ -57,13 +57,23 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
 
                 // Visibility logic
                 let isVisible = !layer.hidden;
+                let shouldTraverse = true;
+
                 if (clip.tachieLayers && clip.tachieLayers.length > 0) {
-                    isVisible = clip.tachieLayers.includes(currentPath);
+                    const inList = clip.tachieLayers.includes(currentPath);
+                    const childInList = !!(layer.children && clip.tachieLayers.some(p => p.startsWith(currentPath + '/')));
+
+                    if (layer.children) {
+                        isVisible = inList || childInList;
+                        shouldTraverse = isVisible;
+                    } else {
+                        isVisible = inList;
+                        shouldTraverse = false;
+                    }
                 }
 
                 if (layer.children) {
-                    // Only traverse into children if the current group itself is visible
-                    if (isVisible) {
+                    if (shouldTraverse) {
                         drawLayers(layer.children, currentPath);
                     }
                 } else if (isVisible && layer.canvas) {

@@ -9,7 +9,7 @@ import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
 import { Clip, Track, ClipType, CodeStep } from '@/types';
 import { Timeline } from './Timeline';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
 import { InteractOverlay } from './InteractOverlay';
 import { bundledLanguages } from 'shiki';
 import '@/lib/i18n'; // Initialize i18n
@@ -21,16 +21,113 @@ import {
     Grid, Scissors, Globe, CheckSquare, ChevronDown, ChevronRight, Bookmark, PlusSquare
 } from 'lucide-react';
 import { readPsd } from 'ag-psd';
+import { FlowEditor } from './FlowEditor';
+import { GOOGLE_FONTS, SYSTEM_FONTS } from '@/lib/fonts';
 
 const INITIAL_TRACKS: Track[] = [
-    { id: 1, name: 'Overlay Text' },
-    { id: 2, name: 'Main Video' },
+    { id: 1, name: 'Foreground' },
+    { id: 2, name: 'Main' },
     { id: 3, name: 'Background' },
 ];
 
 const INITIAL_CLIPS: Clip[] = [
-    { id: 'c1', type: 'text', trackId: 1, startFrame: 0, durationInFrames: 60, content: 'Hello World', title: 'Intro Text' },
-    { id: 'c2', type: 'text', trackId: 1, startFrame: 70, durationInFrames: 50, content: 'Omoti Editor', title: 'Brand Text' },
+    // Background
+    {
+        id: 'bg-gradient', type: 'shape', trackId: 3, startFrame: 0, durationInFrames: 510,
+        content: 'rect', title: 'Background',
+        x: 0, y: 0, width: 1280, height: 720,
+        style: { background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' },
+        animation: { type: 'none', duration: 0 }
+    },
+
+    // Scene 1: Introduction (Akane)
+    {
+        id: 'intro-title', type: 'text', trackId: 1, startFrame: 0, durationInFrames: 60,
+        content: 'React入門講座', title: 'Project Title',
+        x: 340, y: 200, width: 600, height: 100,
+        style: { color: '#61dafb', fontSize: '80px', fontFamily: 'Kaisei Tokumin', fontWeight: 'bold', textAlign: 'center' },
+        animation: { type: 'pop', duration: 30 }
+    },
+    {
+        id: 's1-akane', type: 'tachie', trackId: 2, startFrame: 30, durationInFrames: 120,
+        content: '/uploads/1770692241459-_____SD___.psd', title: 'Akane (a)',
+        x: -50, y: 150, width: 600, height: 600,
+        animation: { type: 'slide', duration: 30 }
+    },
+    {
+        id: 's1-sub', type: 'text', trackId: 1, startFrame: 40, durationInFrames: 110,
+        content: 'こんにちは！茜です。\n今日はReactの基礎を解説するよ！', title: 'Subtitle 1',
+        x: 400, y: 550, width: 700, height: 120,
+        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px' },
+        animation: { type: 'fade', duration: 15 }
+    },
+
+    // Scene 2: Aoi explains Components
+    {
+        id: 's2-aoi', type: 'tachie', trackId: 2, startFrame: 150, durationInFrames: 120,
+        content: '/uploads/1770692241459-_____SD___.psd', title: 'Aoi (aoi)',
+        x: 730, y: 150, width: 600, height: 600,
+        animation: { type: 'slide', duration: 30 }
+    },
+    {
+        id: 's2-sub', type: 'text', trackId: 1, startFrame: 160, durationInFrames: 110,
+        content: '葵だよ！Reactは「コンポーネント」を\n組み合わせて画面を作るのが特徴なんだ。', title: 'Subtitle 2',
+        x: 200, y: 550, width: 700, height: 120,
+        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px' },
+        animation: { type: 'fade', duration: 15 }
+    },
+
+    // Scene 3: Code Example
+    {
+        id: 's3-code', type: 'code', trackId: 3, startFrame: 270, durationInFrames: 120,
+        content: 'function Welcome() {\n  return <h1>Hello, React!</h1>;\n}', title: 'React Code',
+        x: 340, y: 150, width: 600, height: 350,
+        language: 'tsx',
+        steps: [
+            { code: 'function Welcome() {\n  return <h1>Hello, React!</h1>;\n}', frameOffset: 0 }
+        ],
+        animation: { type: 'fade', duration: 20 }
+    },
+    {
+        id: 's3-sub', type: 'text', trackId: 1, startFrame: 270, durationInFrames: 120,
+        content: 'こんな風に、HTMLみたいな見た目を\nJavaScriptで書けるのが便利だよね。', title: 'Subtitle 3',
+        x: 340, y: 550, width: 600, height: 120,
+        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px', textAlign: 'center' },
+        animation: { type: 'fade', duration: 15 }
+    },
+
+    // Scene 4: Flow Chart
+    {
+        id: 's4-flow', type: 'flow', trackId: 3, startFrame: 390, durationInFrames: 120,
+        content: 'Component Tree', title: 'Component Flow',
+        x: 340, y: 150, width: 600, height: 350,
+        nodes: [
+            { id: 'app', data: { label: 'App' }, position: { x: 250, y: 20 }, style: { background: '#61dafb', color: '#000', fontWeight: 'bold' } },
+            { id: 'header', data: { label: 'Header' }, position: { x: 100, y: 150 }, style: { background: '#fff', color: '#000' } },
+            { id: 'main', data: { label: 'Main' }, position: { x: 400, y: 150 }, style: { background: '#fff', color: '#000' } },
+        ],
+        edges: [
+            { id: 'e1', source: 'app', target: 'header', animated: true },
+            { id: 'e2', source: 'app', target: 'main', animated: true },
+        ],
+        animation: { type: 'fade', duration: 20 }
+    },
+
+    // Scene 5: Outro
+    {
+        id: 's5-both-text', type: 'text', trackId: 1, startFrame: 450, durationInFrames: 60,
+        content: '一緒にマスターしよう！', title: 'Closing',
+        x: 340, y: 250, width: 600, height: 100,
+        style: { color: '#ffffff', fontSize: '48px', fontFamily: 'Kaisei Tokumin', textAlign: 'center', fontWeight: 'bold' },
+        animation: { type: 'pop', duration: 20 }
+    },
+
+    // Global Audio
+    {
+        id: 'bg-music', type: 'audio', trackId: 3, startFrame: 0, durationInFrames: 510,
+        content: 'https://actions.google.com/sounds/v1/science_fiction/stinger_heavy_transition.ogg', title: 'BGM',
+        animation: { type: 'none', duration: 0 }
+    }
 ];
 
 interface Asset {
@@ -84,6 +181,13 @@ export default function Editor() {
             } catch (e) {
                 console.error('Failed to parse tachie presets', e);
             }
+        } else {
+            // Seed default presets if empty
+            const psdUrl = '/uploads/1770692241459-_____SD___.psd';
+            setTachiePresets([
+                { id: 'p-akane', name: 'a (琴乃茜)', assetUrl: psdUrl, layers: [] },
+                { id: 'p-aoi', name: 'aoi (葵)', assetUrl: psdUrl, layers: [] }
+            ]);
         }
     }, []);
 
@@ -353,22 +457,30 @@ export default function Editor() {
             trackId,
             startFrame: start, // Place at valid spot
             durationInFrames: duration,
-            width: type === 'code' ? 600 : undefined,
-            height: type === 'code' ? 400 : undefined,
-            x: type === 'code' ? 340 : undefined,
-            y: type === 'code' ? 160 : undefined,
+            width: (type === 'code' || type === 'flow') ? 600 : undefined,
+            height: (type === 'code' || type === 'flow') ? 400 : undefined,
+            x: (type === 'code' || type === 'flow') ? 340 : undefined,
+            y: (type === 'code' || type === 'flow') ? 160 : undefined,
             content: contentOverride || (
                 type === 'text' ? 'New Text' :
                     type === 'audio' ? 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' :
                         type === 'shape' ? 'rect' :
                             type === 'code' ? 'console.log("Hello World");' :
-                                'https://picsum.photos/seed/picsum/800/450'
+                                type === 'flow' ? 'New Flow' :
+                                    'https://picsum.photos/seed/picsum/800/450'
             ),
             title: `New ${contentOverride || type}`,
             style: type === 'shape' ? { backgroundColor: '#ffffff' } : {},
             animation: { type: 'none', duration: 0 }, // Default animation
             language: type === 'code' ? 'typescript' : undefined,
             steps: type === 'code' ? [{ code: 'console.log("Hello World");', frameOffset: 0 }] : undefined,
+            nodes: type === 'flow' ? [
+                { id: '1', data: { label: 'Node 1' }, position: { x: 50, y: 50 } },
+                { id: '2', data: { label: 'Node 2' }, position: { x: 200, y: 150 } },
+            ] : undefined,
+            edges: type === 'flow' ? [
+                { id: 'e1-2', source: '1', target: '2' },
+            ] : undefined,
         };
         setClips([...clips, newClip]);
         setSelectedClipId(newClip.id);
@@ -1017,6 +1129,16 @@ export default function Editor() {
                                                                 </div>
                                                             </div>
                                                         </div>
+                                                    ) : selectedClip.type === 'flow' ? (
+                                                        <div className="space-y-4">
+                                                            <FlowEditor
+                                                                initialNodes={selectedClip.nodes || []}
+                                                                initialEdges={selectedClip.edges || []}
+                                                                onUpdate={(nodes, edges) => {
+                                                                    handleBatchUpdateClip({ nodes, edges });
+                                                                }}
+                                                            />
+                                                        </div>
                                                     ) : (
                                                         <Input
                                                             value={selectedClip.content}
@@ -1051,13 +1173,20 @@ export default function Editor() {
                                                                         <SelectTrigger className="h-8 text-xs">
                                                                             <SelectValue placeholder="Font" />
                                                                         </SelectTrigger>
-                                                                        <SelectContent>
-                                                                            <SelectItem value="sans-serif">Sans Serif</SelectItem>
-                                                                            <SelectItem value="serif">Serif</SelectItem>
-                                                                            <SelectItem value="monospace">Monospace</SelectItem>
-                                                                            <SelectItem value="Inter">Inter</SelectItem>
-                                                                            <SelectItem value="Roboto">Roboto</SelectItem>
-                                                                            <SelectItem value="'Comic Sans MS'">Comic Sans</SelectItem>
+                                                                        <SelectContent className="max-h-[300px]">
+                                                                            <SelectGroup>
+                                                                                <SelectLabel className="text-[10px] uppercase text-muted-foreground px-2 py-1.5">System</SelectLabel>
+                                                                                {SYSTEM_FONTS.map(f => (
+                                                                                    <SelectItem key={f.family} value={f.family}>{f.name}</SelectItem>
+                                                                                ))}
+                                                                            </SelectGroup>
+                                                                            <SelectSeparator />
+                                                                            <SelectGroup>
+                                                                                <SelectLabel className="text-[10px] uppercase text-muted-foreground px-2 py-1.5">Google Fonts</SelectLabel>
+                                                                                {GOOGLE_FONTS.map(f => (
+                                                                                    <SelectItem key={f.family} value={f.family}>{f.name}</SelectItem>
+                                                                                ))}
+                                                                            </SelectGroup>
                                                                         </SelectContent>
                                                                     </Select>
                                                                 </div>
@@ -1243,6 +1372,17 @@ export default function Editor() {
                                         </Button>
                                         <Button
                                             variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
+                                            onClick={() => addClip('flow')}
+                                            draggable
+                                            onDragStart={(e) => {
+                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'flow', content: 'New Flow' }));
+                                            }}
+                                        >
+                                            <Grid size={16} />
+                                            <span className="text-[10px]">{t('editor.elements.flow')}</span>
+                                        </Button>
+                                        <Button
+                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
                                             onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}
                                             draggable
                                             onDragStart={(e) => {
@@ -1421,7 +1561,7 @@ export default function Editor() {
                                     currentFrame >= c.startFrame &&
                                     currentFrame < c.startFrame + c.durationInFrames &&
                                     c.id !== selectedClipId &&
-                                    ['text', 'image', 'shape', 'code', 'tachie'].includes(c.type) // Only positionable types
+                                    ['text', 'image', 'shape', 'code', 'tachie', 'flow'].includes(c.type) // Only positionable types
                                 ).map(clip => {
                                     const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
                                     const x = isPositioned ? (clip.x || 0) : 0;

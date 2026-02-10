@@ -16,7 +16,9 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     const [isRotating, setIsRotating] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
     const [initialClipState, setInitialClipState] = useState<{ x: number, y: number, w: number, h: number, r: number } | null>(null);
-    const [snapLines, setSnapLines] = useState<{ x: boolean, y: boolean }>({ x: false, y: false });
+    const [snapLines, setSnapLines] = useState<{ centerX: boolean, centerY: boolean, left: boolean, top: boolean, right: boolean, bottom: boolean }>({
+        centerX: false, centerY: false, left: false, top: false, right: false, bottom: false
+    });
 
     // Safe access to clip properties for hooks/logic
     const x = clip?.x ?? 0;
@@ -55,79 +57,114 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
                 const newX = initialClipState.x + dx;
                 const newY = initialClipState.y + dy;
 
-                // Snap to Center Logic
+                // Snap Logic
                 const centerX = compWidth / 2;
                 const centerY = compHeight / 2;
                 const threshold = 15;
 
-                // Snap X
                 const currentCenterX = newX + initialClipState.w / 2;
+                const currentCenterY = newY + initialClipState.h / 2;
+                const currentLeft = newX;
+                const currentRight = newX + initialClipState.w;
+                const currentTop = newY;
+                const currentBottom = newY + initialClipState.h;
+
                 let finalX = newX;
-                let snappedX = false;
+                let snapXType: 'center' | 'left' | 'right' | null = null;
 
                 if (Math.abs(currentCenterX - centerX) < threshold) {
                     finalX = centerX - initialClipState.w / 2;
-                    snappedX = true;
+                    snapXType = 'center';
+                } else if (Math.abs(currentLeft - 0) < threshold) {
+                    finalX = 0;
+                    snapXType = 'left';
+                } else if (Math.abs(currentRight - compWidth) < threshold) {
+                    finalX = compWidth - initialClipState.w;
+                    snapXType = 'right';
                 }
 
-                // Snap Y
-                const currentCenterY = newY + initialClipState.h / 2;
                 let finalY = newY;
-                let snappedY = false;
+                let snapYType: 'center' | 'top' | 'bottom' | null = null;
 
                 if (Math.abs(currentCenterY - centerY) < threshold) {
                     finalY = centerY - initialClipState.h / 2;
-                    snappedY = true;
+                    snapYType = 'center';
+                } else if (Math.abs(currentTop - 0) < threshold) {
+                    finalY = 0;
+                    snapYType = 'top';
+                } else if (Math.abs(currentBottom - compHeight) < threshold) {
+                    finalY = compHeight - initialClipState.h;
+                    snapYType = 'bottom';
                 }
 
-                setSnapLines({ x: snappedX, y: snappedY });
+                setSnapLines({
+                    centerX: snapXType === 'center',
+                    centerY: snapYType === 'center',
+                    left: snapXType === 'left',
+                    right: snapXType === 'right',
+                    top: snapYType === 'top',
+                    bottom: snapYType === 'bottom'
+                });
                 onUpdate({ x: Math.round(finalX), y: Math.round(finalY), width: initialClipState.w, height: initialClipState.h });
             }
 
             if (isResizing) {
-                // Project screen delta to local rotated space
-                // Angle in radians (negative because Y is down in screen? No, standard rotation matrix)
-                // Screen coord to Local: Rotate by -theta.
-                // Theta is initialClipState.r (degrees).
                 const theta = initialClipState.r * (Math.PI / 180);
                 const cos = Math.cos(theta);
                 const sin = Math.sin(theta);
-
-                // standard 2d rotation
                 const localDx = dx * cos + dy * sin;
                 const localDy = -dx * sin + dy * cos;
-
-                // Determine new dimensions
                 let newW = Math.max(10, initialClipState.w + localDx);
                 let newH = Math.max(10, initialClipState.h + localDy);
 
+                const threshold = 15;
+                let snapRight = false;
+                let snapBottom = false;
+                let snapCenterX = false;
+                let snapCenterY = false;
+
+                // Snapping for resize (only if rotation is 0 for simplicity)
+                if (initialClipState.r === 0) {
+                    const currentRight = initialClipState.x + newW;
+                    if (Math.abs(currentRight - compWidth) < threshold) {
+                        newW = compWidth - initialClipState.x;
+                        snapRight = true;
+                    } else if (Math.abs(currentRight - compWidth / 2) < threshold) {
+                        newW = compWidth / 2 - initialClipState.x;
+                        snapCenterX = true;
+                    }
+
+                    const currentBottom = initialClipState.y + newH;
+                    if (Math.abs(currentBottom - compHeight) < threshold) {
+                        newH = compHeight - initialClipState.y;
+                        snapBottom = true;
+                    } else if (Math.abs(currentBottom - compHeight / 2) < threshold) {
+                        newH = compHeight / 2 - initialClipState.y;
+                        snapCenterY = true;
+                    }
+                }
+
                 if (e.shiftKey) {
                     const ratio = initialClipState.w / initialClipState.h;
-                    // Keep aspect ratio
                     if (Math.abs(localDx) > Math.abs(localDy)) {
                         newH = newW / ratio;
+                        // Clear vertical snap if shift-resize changes H away from snap
+                        if (snapBottom || snapCenterY) {
+                            // This is tricky. For now, let's just let it be.
+                        }
                     } else {
                         newW = newH * ratio;
                     }
                 }
 
-                // We assume top-left anchor is fixed for now?
-                // Rotating resize is tricky. If we just change W/H, it expands from CENTER if using transform-origin center?
-                // Visual box is `transformOrigin: center`.
-                // If I increase width, the box grows left AND right from center.
-                // But dragging bottom-right corner usually implies Top-Left is anchored.
-                // To achieve Corner Resize behavior with Center Keypoint:
-                // We must Adjust Center (x, y) as well as Width/Height.
-
-                // For simplicity MVP: Let it grow from center?
-                // "Resize Handle (Bottom Right)". 
-                // If I drag BR away, box grows.
-                // If it grows from center, BR moves out, TL moves out.
-                // The mouse cursor stays at BR.
-                // So "Grow from Center" actually aligns well with "Drag BR away"?
-                // Yes, if we consider `localDx` as full DeltaW (triggered by edge drag)?
-                // No, `localDx` is Center-to-Mouse delta change? No, startPos is mouse.
-                // It works for center-based scaling fairly intuitively if we mimic scaling.
+                setSnapLines({
+                    centerX: snapCenterX,
+                    centerY: snapCenterY,
+                    left: false,
+                    top: false,
+                    right: snapRight,
+                    bottom: snapBottom
+                });
 
                 onUpdate({ width: Math.round(newW), height: Math.round(newH) });
             }
@@ -136,18 +173,13 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
                 const rect = containerRef.current.getBoundingClientRect();
                 const scaleX = compWidth / rect.width;
                 const scaleY = compHeight / rect.height;
-
-                // Calculate angle relative to center
                 const screenCX = rect.left + rect.width * ((initialClipState.x + initialClipState.w / 2) / compWidth);
                 const screenCY = rect.top + rect.height * ((initialClipState.y + initialClipState.h / 2) / compHeight);
-
                 const angleRad = Math.atan2(e.clientY - screenCY, e.clientX - screenCX);
-                let angleDeg = (angleRad * 180 / Math.PI) + 90; // +90 because handle is at top (-90)
-
+                let angleDeg = (angleRad * 180 / Math.PI) + 90;
                 if (e.shiftKey) {
                     angleDeg = Math.round(angleDeg / 15) * 15;
                 }
-
                 onUpdate({ rotate: Math.round(angleDeg) });
             }
         };
@@ -157,7 +189,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
             setIsResizing(false);
             setIsRotating(false);
             setInitialClipState(null);
-            setSnapLines({ x: false, y: false });
+            setSnapLines({ centerX: false, centerY: false, left: false, top: false, right: false, bottom: false });
         };
 
         window.addEventListener('mousemove', handleMouseMove);
@@ -172,7 +204,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     if (!clip) return null;
 
     // Only text, image, shape, code support positioning for now
-    if (!['text', 'image', 'shape', 'code', 'tachie'].includes(clip.type)) return null;
+    if (!['text', 'image', 'shape', 'code', 'tachie', 'flow'].includes(clip.type)) return null;
 
     // Calculate percentage styles for the overlay box
     const style: React.CSSProperties = {
@@ -195,11 +227,23 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     return (
         <div ref={containerRef} className="absolute inset-0 pointer-events-none z-50">
             {/* Snap Lines */}
-            {snapLines.x && (
+            {snapLines.centerX && (
                 <div className="absolute top-0 bottom-0 w-px bg-red-500 left-1/2 -ml-[0.5px] z-40" />
             )}
-            {snapLines.y && (
+            {snapLines.centerY && (
                 <div className="absolute left-0 right-0 h-px bg-red-500 top-1/2 -mt-[0.5px] z-40" />
+            )}
+            {snapLines.left && (
+                <div className="absolute top-0 bottom-0 w-px bg-red-500 left-0 z-40" />
+            )}
+            {snapLines.right && (
+                <div className="absolute top-0 bottom-0 w-px bg-red-500 right-0 z-40" />
+            )}
+            {snapLines.top && (
+                <div className="absolute left-0 right-0 h-px bg-red-500 top-0 z-40" />
+            )}
+            {snapLines.bottom && (
+                <div className="absolute left-0 right-0 h-px bg-red-500 bottom-0 z-40" />
             )}
 
             {/* The Gizmo Box */}

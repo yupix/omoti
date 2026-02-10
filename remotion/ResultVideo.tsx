@@ -4,6 +4,33 @@ import React from 'react';
 import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
 import { TachieRenderer } from './TachieRenderer';
+import { FlowRenderer } from './FlowRenderer';
+import { loadFont as loadNotoSansJP } from "@remotion/google-fonts/NotoSansJP";
+import { loadFont as loadNotoSerifJP } from "@remotion/google-fonts/NotoSerifJP";
+import { loadFont as loadZenKakuGothicNew } from "@remotion/google-fonts/ZenKakuGothicNew";
+import { loadFont as loadMPLUS1p } from "@remotion/google-fonts/MPLUS1p";
+import { loadFont as loadKaiseiTokumin } from "@remotion/google-fonts/KaiseiTokumin";
+import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
+import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto";
+import { loadFont as loadMontserrat } from "@remotion/google-fonts/Montserrat";
+import { loadFont as loadPlayfairDisplay } from "@remotion/google-fonts/PlayfairDisplay";
+import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
+import { loadFont as loadBebasNeue } from "@remotion/google-fonts/BebasNeue";
+import { loadFont as loadPermanentMarker } from "@remotion/google-fonts/PermanentMarker";
+
+// Preload common fonts
+loadNotoSansJP();
+loadNotoSerifJP();
+loadZenKakuGothicNew();
+loadMPLUS1p();
+loadKaiseiTokumin();
+loadInter();
+loadRoboto();
+loadMontserrat();
+loadPlayfairDisplay();
+loadOswald();
+loadBebasNeue();
+loadPermanentMarker();
 
 const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
     const frame = useCurrentFrame();
@@ -218,6 +245,14 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
         return (
             <div style={positionStyle}>
                 <TachieRenderer clip={clip} />
+            </div>
+        );
+    }
+
+    if (clip.type === 'flow') {
+        return (
+            <div style={positionStyle}>
+                <FlowRenderer clip={clip} />
             </div>
         );
     }

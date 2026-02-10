@@ -1,4 +1,4 @@
-export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code' | 'tachie';
+export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code' | 'tachie' | 'flow';
 
 
 export interface Clip {
@@ -26,6 +26,8 @@ export interface Clip {
     playbackRate?: number; // Playback speed (default 1)
     volume?: number; // Audio volume (0-1, default 1)
     tachieLayers?: string[]; // IDs or paths of visible layers for PSD
+    nodes?: any[]; // Nodes for ReactFlow
+    edges?: any[]; // Edges for ReactFlow
 }
 
 export interface CodeStep {
