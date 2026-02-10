@@ -1,0 +1,5 @@
+fastapi
+uvicorn
+aivoice-python
+pythonnet
+pydantic

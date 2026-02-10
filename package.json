@@ -6,7 +6,8 @@
     "dev": "next dev",
     "build": "next build",
     "start": "next start",
-    "lint": "eslint"
+    "lint": "eslint",
+    "server:aivoice": "cd aivoice-server && start_server.bat"
   },
   "dependencies": {
     "@radix-ui/react-icons": "^1.3.2",

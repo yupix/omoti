@@ -3,153 +3,24 @@
 import React, { useState, useRef, useEffect, useMemo } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { ResultVideo } from '@/remotion/ResultVideo';
-import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@/components/ui/card';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Clip, Track, ClipType, CodeStep } from '@/types';
+import { Clip, Track, ClipType } from '@/types';
 import { Timeline } from './Timeline';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue, SelectGroup, SelectLabel, SelectSeparator } from '@/components/ui/select';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { InteractOverlay } from './InteractOverlay';
-import { bundledLanguages } from 'shiki';
 import '@/lib/i18n'; // Initialize i18n
 import { useTranslation } from 'react-i18next';
 import {
-    Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon,
-    Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square,
-    Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock, Upload,
-    Grid, Scissors, Globe, CheckSquare, ChevronDown, ChevronRight, Bookmark, PlusSquare
+    Download, Box, Play, Pause, SkipBack, SkipForward,
+    Loader2, Save, FolderOpen, Globe, Scissors, Copy, Trash2
 } from 'lucide-react';
 import { readPsd } from 'ag-psd';
-import { FlowEditor } from './FlowEditor';
-import { GOOGLE_FONTS, SYSTEM_FONTS } from '@/lib/fonts';
+import { getAIVoicePresets } from '@/lib/aivoice';
+import { PropertiesPanel } from './PropertiesPanel';
+import { AssetsPanel } from './AssetsPanel';
 
-const INITIAL_TRACKS: Track[] = [
-    { id: 1, name: 'Foreground' },
-    { id: 2, name: 'Main' },
-    { id: 3, name: 'Background' },
-];
-
-const INITIAL_CLIPS: Clip[] = [
-    // Background
-    {
-        id: 'bg-gradient', type: 'shape', trackId: 3, startFrame: 0, durationInFrames: 510,
-        content: 'rect', title: 'Background',
-        x: 0, y: 0, width: 1280, height: 720,
-        style: { background: 'linear-gradient(135deg, #1a1a2e 0%, #16213e 100%)' },
-        animation: { type: 'none', duration: 0 }
-    },
-
-    // Scene 1: Introduction (Akane)
-    {
-        id: 'intro-title', type: 'text', trackId: 1, startFrame: 0, durationInFrames: 60,
-        content: 'React入門講座', title: 'Project Title',
-        x: 340, y: 200, width: 600, height: 100,
-        style: { color: '#61dafb', fontSize: '80px', fontFamily: 'Kaisei Tokumin', fontWeight: 'bold', textAlign: 'center' },
-        animation: { type: 'pop', duration: 30 }
-    },
-    {
-        id: 's1-akane', type: 'tachie', trackId: 2, startFrame: 30, durationInFrames: 120,
-        content: '/uploads/1770692241459-_____SD___.psd', title: 'Akane (a)',
-        x: -50, y: 150, width: 600, height: 600,
-        animation: { type: 'slide', duration: 30 }
-    },
-    {
-        id: 's1-sub', type: 'text', trackId: 1, startFrame: 40, durationInFrames: 110,
-        content: 'こんにちは！茜です。\n今日はReactの基礎を解説するよ！', title: 'Subtitle 1',
-        x: 400, y: 550, width: 700, height: 120,
-        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px' },
-        animation: { type: 'fade', duration: 15 }
-    },
-
-    // Scene 2: Aoi explains Components
-    {
-        id: 's2-aoi', type: 'tachie', trackId: 2, startFrame: 150, durationInFrames: 120,
-        content: '/uploads/1770692241459-_____SD___.psd', title: 'Aoi (aoi)',
-        x: 730, y: 150, width: 600, height: 600,
-        animation: { type: 'slide', duration: 30 }
-    },
-    {
-        id: 's2-sub', type: 'text', trackId: 1, startFrame: 160, durationInFrames: 110,
-        content: '葵だよ！Reactは「コンポーネント」を\n組み合わせて画面を作るのが特徴なんだ。', title: 'Subtitle 2',
-        x: 200, y: 550, width: 700, height: 120,
-        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px' },
-        animation: { type: 'fade', duration: 15 }
-    },
-
-    // Scene 3: Code Example
-    {
-        id: 's3-code', type: 'code', trackId: 3, startFrame: 270, durationInFrames: 120,
-        content: 'function Welcome() {\n  return <h1>Hello, React!</h1>;\n}', title: 'React Code',
-        x: 340, y: 150, width: 600, height: 350,
-        language: 'tsx',
-        steps: [
-            { code: 'function Welcome() {\n  return <h1>Hello, React!</h1>;\n}', frameOffset: 0 }
-        ],
-        animation: { type: 'fade', duration: 20 }
-    },
-    {
-        id: 's3-sub', type: 'text', trackId: 1, startFrame: 270, durationInFrames: 120,
-        content: 'こんな風に、HTMLみたいな見た目を\nJavaScriptで書けるのが便利だよね。', title: 'Subtitle 3',
-        x: 340, y: 550, width: 600, height: 120,
-        style: { color: '#ffffff', fontSize: '32px', fontFamily: 'Noto Sans JP', backgroundColor: 'rgba(0,0,0,0.6)', borderRadius: '12px', padding: '20px', textAlign: 'center' },
-        animation: { type: 'fade', duration: 15 }
-    },
-
-    // Scene 4: Flow Chart
-    {
-        id: 's4-flow', type: 'flow', trackId: 3, startFrame: 390, durationInFrames: 120,
-        content: 'Component Tree', title: 'Component Flow',
-        x: 340, y: 150, width: 600, height: 350,
-        nodes: [
-            { id: 'app', data: { label: 'App' }, position: { x: 250, y: 20 }, style: { background: '#61dafb', color: '#000', fontWeight: 'bold' } },
-            { id: 'header', data: { label: 'Header' }, position: { x: 100, y: 150 }, style: { background: '#fff', color: '#000' } },
-            { id: 'main', data: { label: 'Main' }, position: { x: 400, y: 150 }, style: { background: '#fff', color: '#000' } },
-        ],
-        edges: [
-            { id: 'e1', source: 'app', target: 'header', animated: true },
-            { id: 'e2', source: 'app', target: 'main', animated: true },
-        ],
-        animation: { type: 'fade', duration: 20 }
-    },
-
-    // Scene 5: Outro
-    {
-        id: 's5-both-text', type: 'text', trackId: 1, startFrame: 450, durationInFrames: 60,
-        content: '一緒にマスターしよう！', title: 'Closing',
-        x: 340, y: 250, width: 600, height: 100,
-        style: { color: '#ffffff', fontSize: '48px', fontFamily: 'Kaisei Tokumin', textAlign: 'center', fontWeight: 'bold' },
-        animation: { type: 'pop', duration: 20 }
-    },
-
-    // Global Audio
-    {
-        id: 'bg-music', type: 'audio', trackId: 3, startFrame: 0, durationInFrames: 510,
-        content: 'https://actions.google.com/sounds/v1/science_fiction/stinger_heavy_transition.ogg', title: 'BGM',
-        animation: { type: 'none', duration: 0 }
-    }
-];
-
-interface Asset {
-    name: string;
-    url: string;
-    type: 'image' | 'video' | 'audio' | 'tachie';
-    duration?: number; // in seconds
-}
-
-const getMediaDuration = (url: string, type: 'video' | 'audio'): Promise<number> => {
-    return new Promise((resolve) => {
-        const element = type === 'video' ? document.createElement('video') : document.createElement('audio');
-        element.preload = 'metadata';
-        element.onloadedmetadata = () => {
-            resolve(element.duration);
-        };
-        element.onerror = () => {
-            resolve(0);
-        };
-        element.src = url;
-    });
-};
+import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
+import { Asset, getMediaDuration } from './utils';
 
 export default function Editor() {
     const { t, i18n } = useTranslation();
@@ -171,6 +42,9 @@ export default function Editor() {
     const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
     const [pathsWithChildren, setPathsWithChildren] = useState<Set<string>>(new Set());
     const [tachiePresets, setTachiePresets] = useState<{ id: string; name: string; assetUrl: string; layers: string[] }[]>([]);
+    const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
+    const [selectedAiVoicePreset, setSelectedAiVoicePreset] = useState<string>('');
+    const [isSynthesizing, setIsSynthesizing] = useState(false);
 
     // Load tachie presets from localStorage
     useEffect(() => {
@@ -195,6 +69,14 @@ export default function Editor() {
     useEffect(() => {
         localStorage.setItem('omoti_tachie_presets', JSON.stringify(tachiePresets));
     }, [tachiePresets]);
+
+    // Fetch AIVOICE presets
+    useEffect(() => {
+        getAIVoicePresets().then(presets => {
+            setAiVoicePresets(presets);
+            if (presets.length > 0) setSelectedAiVoicePreset(presets[0]);
+        });
+    }, []);
 
     // Fetch assets on load
     useEffect(() => {
@@ -277,8 +159,8 @@ export default function Editor() {
     };
 
     // Dynamic total frames based on content + buffer
-    const maxClipEnd = Math.max(0, ...clips.map(c => c.startFrame + c.durationInFrames));
-    const totalFrames = Math.max(300, maxClipEnd + 150); // Minimum 10s, or content + 5s buffer
+    const maxClipEnd = Math.max(0, ...clips.map(c => (c.startFrame || 0) + (c.durationInFrames || 0)));
+    const totalFrames = Math.max(300, (isNaN(maxClipEnd) ? 0 : maxClipEnd) + 150); // Minimum 10s, or content + 5s buffer
 
     const inputProps = useMemo(() => ({ clips, primaryColor }), [clips, primaryColor]);
 
@@ -410,13 +292,40 @@ export default function Editor() {
     };
 
     const addClip = (type: ClipType, contentOverride?: string, durationOverride?: number, startFrameOverride?: number, trackIdOverride?: number) => {
-        const trackId = trackIdOverride ?? (type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2);
-        // Default 60 frames (2s), or durationOverride (seconds) * 30fps
         const duration = durationOverride ? Math.ceil(durationOverride * 30) : 60;
         let start = startFrameOverride ?? currentFrame;
+        let trackId = trackIdOverride ?? (type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2);
 
         // Find next available slot if collision
-        // Only auto-resolve collision if we are using default placement (not explicit drop)
+        // If we have a specific start frame but it collides, try to find ANY track that fits
+        if (startFrameOverride !== undefined && trackIdOverride === undefined) {
+            if (checkCollision('new', start, duration, trackId)) {
+                // Try tracks 1-10 to see if any have space
+                let found = false;
+                for (let tId = 1; tId <= 10; tId++) {
+                    if (!checkCollision('new', start, duration, tId)) {
+                        trackId = tId;
+                        found = true;
+                        break;
+                    }
+                }
+
+                // If we found a track that wasn't previously in tracks, add it
+                if (found && !tracks.find(t => t.id === trackId)) {
+                    setTracks(prev => [...prev, { id: trackId, name: `Track ${trackId}` }]);
+                }
+
+                // If still not found after checking 10 tracks, we'll try to shift it slightly (auto-resolve)
+                // instead of strictly failing
+                if (!found) {
+                    while (checkCollision('new', start, duration, trackId)) {
+                        start += 5;
+                        if (start > totalFrames) break;
+                    }
+                }
+            }
+        }
+
         if (startFrameOverride === undefined) {
             let attempts = 0;
             while (checkCollision('new', start, duration, trackId) && attempts < 100) {
@@ -434,19 +343,22 @@ export default function Editor() {
                 attempts++;
             }
         } else {
-            // Check collision for explicit drop? Maybe just warn or allow overlap?
-            // The requirement was "prevent overlap", so let's enforce checking.
+            // Check collision for explicit drop/placement
             if (checkCollision('new', start, duration, trackId)) {
-                // If drop collides, we could reject or shift?
-                // Rejecting is safer for now effectively "no-op" if invalid drop
-                // Or find nearest valid space?
-                // Lets just allow it but maybe shift if possible? 
-                // To keep "prevent overlap" strict, let's reject.
-                // But better UX might be to shift to end of whatever we hit?
-                // For simplicity: reject drop if invalid.
-                if (checkCollision('new', start, duration, trackId)) {
-                    alert("Cannot place clip here: collision detected.");
-                    return;
+                // Last ditch effort: try to shift it
+                let currentStart = start;
+                let shifted = false;
+                for (let i = 0; i < 50; i++) {
+                    currentStart += 1;
+                    if (!checkCollision('new', currentStart, duration, trackId)) {
+                        start = currentStart;
+                        shifted = true;
+                        break;
+                    }
+                }
+
+                if (!shifted) {
+                    alert("Notice: Could not find a perfectly free spot, placing with potential overlap.");
                 }
             }
         }
@@ -793,706 +705,40 @@ export default function Editor() {
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">
                         {activeTab === 'properties' ? (
-                            <>
-                                {selectedClip ? (
-                                    <div className="space-y-4 animate-in slide-in-from-left duration-300">
-                                        <div className="flex items-center justify-between">
-                                            <h2 className="text-sm font-bold uppercase tracking-wider text-muted-foreground">{t('editor.properties.title')}</h2>
-                                            <Button size="icon" variant="ghost" className="h-6 w-6 text-destructive hover:bg-destructive/20" onClick={removeClip}>
-                                                <Trash2 size={14} />
-                                            </Button>
-                                        </div>
-
-                                        {(selectedClip.type === 'video' || selectedClip.type === 'audio' || (selectedClip.type === 'image' && selectedClip.content.toLowerCase().endsWith('.gif'))) && (
-                                            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card">
-                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.playbackSpeed')}</Label>
-                                                <div className="flex items-center gap-2">
-                                                    <Input
-                                                        type="number"
-                                                        step="0.1"
-                                                        min="0.1"
-                                                        max="10"
-                                                        className="h-8 text-xs font-mono"
-                                                        value={selectedClip.playbackRate || 1}
-                                                        onChange={(e) => handleUpdateClip('playbackRate', parseFloat(e.target.value) || 1)}
-                                                    />
-                                                    <span className="text-xs text-muted-foreground w-8 text-right">
-                                                        {(selectedClip.playbackRate || 1).toFixed(1)}x
-                                                    </span>
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        {(selectedClip.type === 'video' || selectedClip.type === 'audio') && (
-                                            <div className="flex flex-col gap-1.5 p-3 rounded-lg border border-border bg-card">
-                                                <div className="flex items-center justify-between">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.volume')}</Label>
-                                                    <span className="text-xs text-muted-foreground font-mono">
-                                                        {Math.round((localVolume ?? selectedClip.volume ?? 1) * 100)}%
-                                                    </span>
-                                                </div>
-                                                <div className="flex items-center gap-2">
-                                                    <Volume2 size={14} className="text-muted-foreground" />
-                                                    <input
-                                                        type="range"
-                                                        min="0"
-                                                        max="1"
-                                                        step="0.01"
-                                                        className="flex-1 h-2 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
-                                                        value={localVolume ?? selectedClip.volume ?? 1}
-                                                        onChange={(e) => setLocalVolume(parseFloat(e.target.value))}
-                                                        onPointerUp={() => {
-                                                            if (localVolume !== null) {
-                                                                handleUpdateClip('volume', localVolume);
-                                                            }
-                                                        }}
-                                                    />
-                                                </div>
-                                            </div>
-                                        )}
-
-                                        <Card className="bg-secondary/20 border-border/40">
-                                            <CardHeader className="p-3 pb-0">
-                                                <CardTitle className="text-xs font-medium text-muted-foreground">{t('editor.properties.content')}</CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="p-3 space-y-3">
-                                                <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.label')}</Label>
-                                                    <Input
-                                                        value={selectedClip.title || ''}
-                                                        onChange={e => handleUpdateClip('title', e.target.value)}
-                                                        className="h-8 text-sm"
-                                                    />
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.value')}</Label>
-                                                    {selectedClip.type === 'code' ? (
-                                                        <div className="space-y-4">
-                                                            <div className="space-y-1">
-                                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.language')}</Label>
-                                                                <Select
-                                                                    value={selectedClip.language || 'typescript'}
-                                                                    onValueChange={(val) => handleUpdateClip('language', val)}
-                                                                >
-                                                                    <SelectTrigger className="h-8 text-xs">
-                                                                        <SelectValue placeholder="Language" />
-                                                                    </SelectTrigger>
-                                                                    <SelectContent className="max-h-[300px]">
-                                                                        {Object.keys(bundledLanguages).sort().map((lang) => (
-                                                                            <SelectItem key={lang} value={lang}>
-                                                                                {lang}
-                                                                            </SelectItem>
-                                                                        ))}
-                                                                    </SelectContent>
-                                                                </Select>
-                                                            </div>
-                                                            <div className="space-y-1">
-                                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.transitionDuration')}</Label>
-                                                                <Input
-                                                                    type="number"
-                                                                    value={selectedClip.transitionDuration || 24}
-                                                                    onChange={e => handleUpdateClip('transitionDuration', parseInt(e.target.value))}
-                                                                    className="h-8 text-xs font-mono"
-                                                                />
-                                                            </div>
-                                                            <div className="space-y-4">
-                                                                {/* Visual Timeline Bar */}
-                                                                <div className="space-y-1">
-                                                                    <div className="flex justify-between text-[9px] text-muted-foreground uppercase">
-                                                                        <span>{t('editor.properties.timelinePreview')}</span>
-                                                                        <span>{selectedClip.durationInFrames}{t('editor.frames')}</span>
-                                                                    </div>
-                                                                    <div className="relative h-6 bg-secondary/50 rounded overflow-hidden border border-border/50">
-                                                                        {/* Playhead Position */}
-                                                                        <div
-                                                                            className="absolute top-0 bottom-0 border-l-[2px] border-red-500 z-10 transition-all duration-75"
-                                                                            style={{
-                                                                                left: `${Math.min(100, Math.max(0, ((currentFrame - selectedClip.startFrame) / selectedClip.durationInFrames) * 100))}%`
-                                                                            }}
-                                                                        />
-                                                                        {/* Active Range Highlight */}
-                                                                        <div
-                                                                            className="absolute top-0 bottom-0 left-0 bg-primary/10 transition-all duration-75"
-                                                                            style={{
-                                                                                width: `${Math.min(100, Math.max(0, ((currentFrame - selectedClip.startFrame) / selectedClip.durationInFrames) * 100))}%`
-                                                                            }}
-                                                                        />
-
-                                                                        {/* Step Markers */}
-                                                                        {(selectedClip.steps || []).map((s, i) => (
-                                                                            <div
-                                                                                key={i}
-                                                                                className="absolute top-1 bottom-1 w-1 bg-primary rounded-full hover:bg-primary/80 z-20 ring-1 ring-black/50"
-                                                                                style={{ left: `${(s.frameOffset / selectedClip.durationInFrames) * 100}%` }}
-                                                                                title={`Step at ${s.frameOffset}f`}
-                                                                            />
-                                                                        ))}
-                                                                    </div>
-                                                                </div>
-
-                                                                <div className="flex items-center justify-between">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.keyframes')}</Label>
-                                                                    <Button
-                                                                        size="sm" variant="secondary" className="h-6 px-2 text-[10px] hover:bg-primary hover:text-primary-foreground"
-                                                                        onClick={() => {
-                                                                            const offset = Math.max(0, currentFrame - selectedClip.startFrame);
-                                                                            const steps = selectedClip.steps || [];
-                                                                            const prevStep = [...steps].reverse().find(s => s.frameOffset <= offset);
-                                                                            const baseCode = prevStep ? prevStep.code : selectedClip.content;
-
-                                                                            const newSteps = [...steps.filter(s => s.frameOffset !== offset), {
-                                                                                code: baseCode,
-                                                                                frameOffset: offset
-                                                                            }].sort((a, b) => a.frameOffset - b.frameOffset);
-
-                                                                            handleUpdateClip('steps', newSteps);
-                                                                        }}
-                                                                    >
-                                                                        <Plus size={12} className="mr-1" /> {t('editor.properties.addEffect')}
-                                                                    </Button>
-                                                                </div>
-
-                                                                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
-                                                                    {(selectedClip.steps || [{ code: selectedClip.content, frameOffset: 0 }]).map((step, index) => (
-                                                                        <div key={index} className="space-y-2 p-2 rounded-md border border-border bg-background/50 relative group">
-                                                                            <div className="flex items-start gap-2 mb-1">
-                                                                                <div className="flex-1 space-y-1">
-                                                                                    <div className="flex justify-between items-center">
-                                                                                        <Label className="text-[9px] uppercase text-muted-foreground">{t('editor.properties.startOffset')}</Label>
-                                                                                        <span className="text-[9px] font-mono text-muted-foreground bg-primary/10 px-1 rounded">
-                                                                                            {t('editor.global')}: {selectedClip.startFrame + step.frameOffset}{t('editor.frames')}
-                                                                                        </span>
-                                                                                    </div>
-                                                                                    <div className="flex gap-1">
-                                                                                        <Input
-                                                                                            type="number"
-                                                                                            className="h-7 text-xs"
-                                                                                            value={step.frameOffset}
-                                                                                            onChange={(e) => {
-                                                                                                const newSteps = [...(selectedClip.steps || [])];
-                                                                                                newSteps[index] = { ...step, frameOffset: Number(e.target.value) };
-                                                                                                handleUpdateClip('steps', newSteps);
-                                                                                            }}
-                                                                                        />
-                                                                                        <Button
-                                                                                            size="icon" variant="outline" className="h-7 w-7 flex-shrink-0"
-                                                                                            title="Set to Current Playhead"
-                                                                                            onClick={() => {
-                                                                                                const newOffset = Math.max(0, currentFrame - selectedClip.startFrame);
-                                                                                                const newSteps = [...(selectedClip.steps || [])];
-                                                                                                newSteps[index] = { ...step, frameOffset: newOffset };
-                                                                                                handleUpdateClip('steps', newSteps);
-                                                                                            }}
-                                                                                        >
-                                                                                            <Clock size={12} />
-                                                                                        </Button>
-                                                                                    </div>
-                                                                                </div>
-                                                                                <Button
-                                                                                    size="icon" variant="ghost" className="h-7 w-7 text-destructive opacity-0 group-hover:opacity-100 transition-opacity mt-5"
-                                                                                    onClick={() => {
-                                                                                        const newSteps = (selectedClip.steps || []).filter((_, i) => i !== index);
-                                                                                        handleUpdateClip('steps', newSteps);
-                                                                                    }}
-                                                                                    disabled={(selectedClip.steps || []).length <= 1}
-                                                                                >
-                                                                                    <Trash2 size={12} />
-                                                                                </Button>
-                                                                            </div>
-                                                                            <textarea
-                                                                                value={step.code}
-                                                                                onChange={e => {
-                                                                                    const newSteps = [...(selectedClip.steps || [])];
-                                                                                    newSteps[index] = { ...step, code: e.target.value };
-                                                                                    handleUpdateClip('steps', newSteps);
-                                                                                }}
-                                                                                className="w-full h-20 p-2 text-xs font-mono bg-background border border-input rounded-md resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                                                                            />
-                                                                        </div>
-                                                                    ))}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ) : selectedClip.type === 'tachie' ? (
-                                                        <div className="space-y-4">
-                                                            <div className="space-y-2">
-                                                                <div className="flex items-center justify-between">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
-                                                                        <Bookmark size={10} /> Presets
-                                                                    </Label>
-                                                                    <Button
-                                                                        size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1"
-                                                                        onClick={() => {
-                                                                            const name = prompt('Preset Name:');
-                                                                            if (!name) return;
-                                                                            const newPreset = {
-                                                                                id: Math.random().toString(36).substr(2, 9),
-                                                                                name,
-                                                                                assetUrl: selectedClip.content,
-                                                                                layers: selectedClip.tachieLayers || []
-                                                                            };
-                                                                            setTachiePresets([...tachiePresets, newPreset]);
-                                                                        }}
-                                                                    >
-                                                                        <Plus size={10} /> {t('editor.properties.savePreset')}
-                                                                    </Button>
-                                                                </div>
-                                                                <div className="flex flex-wrap gap-1.5">
-                                                                    {tachiePresets.filter(p => p.assetUrl === selectedClip.content).length === 0 ? (
-                                                                        <span className="text-[10px] text-muted-foreground italic">No presets for this asset.</span>
-                                                                    ) : (
-                                                                        tachiePresets.filter(p => p.assetUrl === selectedClip.content).map(preset => (
-                                                                            <div key={preset.id} className="relative group">
-                                                                                <Button
-                                                                                    size="sm" variant="secondary" className="h-6 px-3 text-[10px] bg-primary/10 hover:bg-primary/20 border-primary/20 transition-colors"
-                                                                                    onClick={() => handleUpdateClip('tachieLayers', preset.layers)}
-                                                                                >
-                                                                                    {preset.name}
-                                                                                </Button>
-                                                                                <button
-                                                                                    className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full size-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
-                                                                                    onClick={(e) => {
-                                                                                        e.stopPropagation();
-                                                                                        setTachiePresets(tachiePresets.filter(p => p.id !== preset.id));
-                                                                                    }}
-                                                                                >
-                                                                                    <Trash2 size={8} />
-                                                                                </button>
-                                                                            </div>
-                                                                        ))
-                                                                    )}
-                                                                </div>
-                                                            </div>
-
-                                                            <div className="space-y-2">
-                                                                <Label className="text-[10px] uppercase text-muted-foreground">Visible Layers</Label>
-                                                                <div className="max-h-60 overflow-y-auto border border-border rounded-md p-2 bg-background/50 space-y-1 scrollbar-thin scrollbar-thumb-primary/20 hover:scrollbar-thumb-primary/40">
-                                                                    {availableLayers.length === 0 ? (
-                                                                        <p className="text-[10px] text-muted-foreground text-center py-4 italic">No layers found or loading structure...</p>
-                                                                    ) : (
-                                                                        availableLayers.filter(path => {
-                                                                            // Hide if any of its parent paths are collapsed
-                                                                            const parts = path.split('/');
-                                                                            for (let i = 1; i < parts.length; i++) {
-                                                                                const parentPath = parts.slice(0, i).join('/');
-                                                                                if (collapsedPaths.has(parentPath)) return false;
-                                                                            }
-                                                                            return true;
-                                                                        }).map((path, idx) => {
-                                                                            const isActive = (selectedClip.tachieLayers || []).includes(path);
-                                                                            const isCollapsed = collapsedPaths.has(path);
-                                                                            const hasChildren = pathsWithChildren.has(path);
-                                                                            const parts = path.split('/');
-                                                                            const name = parts[parts.length - 1];
-                                                                            const indent = parts.length - 1;
-
-                                                                            return (
-                                                                                <div
-                                                                                    key={idx}
-                                                                                    className="flex items-center gap-1 hover:bg-primary/10 px-2 py-0.5 rounded-sm cursor-default group transition-colors"
-                                                                                    style={{ paddingLeft: `${indent * 12 + 4}px` }}
-                                                                                >
-                                                                                    <div
-                                                                                        className="size-4 flex items-center justify-center cursor-pointer hover:bg-primary/20 rounded transition-colors"
-                                                                                        onClick={(e) => {
-                                                                                            e.stopPropagation();
-                                                                                            if (!hasChildren) return;
-                                                                                            const next = new Set(collapsedPaths);
-                                                                                            if (isCollapsed) next.delete(path);
-                                                                                            else next.add(path);
-                                                                                            setCollapsedPaths(next);
-                                                                                        }}
-                                                                                    >
-                                                                                        {hasChildren && (
-                                                                                            isCollapsed ? <ChevronRight size={10} className="text-muted-foreground" /> : <ChevronDown size={10} className="text-muted-foreground" />
-                                                                                        )}
-                                                                                    </div>
-                                                                                    <div
-                                                                                        className="flex items-center gap-2 flex-1 cursor-pointer"
-                                                                                        onClick={() => {
-                                                                                            const current = selectedClip.tachieLayers || [];
-                                                                                            const next = current.includes(path)
-                                                                                                ? current.filter(l => l !== path)
-                                                                                                : [...current, path];
-                                                                                            handleUpdateClip('tachieLayers', next);
-                                                                                        }}
-                                                                                    >
-                                                                                        <div className={`size-3.5 rounded border-2 flex-shrink-0 transition-all flex items-center justify-center ${isActive ? 'bg-primary border-primary' : 'bg-transparent border-muted-foreground/30'}`}>
-                                                                                            {isActive && <CheckSquare size={10} className="text-primary-foreground" />}
-                                                                                        </div>
-                                                                                        <span className={`text-[10px] truncate select-none flex-1 ${isActive ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}>{name}</span>
-                                                                                    </div>
-                                                                                </div>
-                                                                            );
-                                                                        })
-                                                                    )}
-                                                                </div>
-                                                            </div>
-                                                        </div>
-                                                    ) : selectedClip.type === 'flow' ? (
-                                                        <div className="space-y-4">
-                                                            <FlowEditor
-                                                                initialNodes={selectedClip.nodes || []}
-                                                                initialEdges={selectedClip.edges || []}
-                                                                onUpdate={(nodes, edges) => {
-                                                                    handleBatchUpdateClip({ nodes, edges });
-                                                                }}
-                                                            />
-                                                        </div>
-                                                    ) : (
-                                                        <Input
-                                                            value={selectedClip.content}
-                                                            onChange={e => handleUpdateClip('content', e.target.value)}
-                                                            className="h-8 text-sm font-mono"
-                                                        />
-                                                    )}
-                                                </div>
-                                                {/* Style Properties */}
-                                                {(selectedClip.type === 'shape' || selectedClip.type === 'text') && (
-                                                    <div className="space-y-3 pt-2 border-t border-border/50">
-                                                        <div className="space-y-1">
-                                                            <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.color')}</Label>
-                                                            <div className="flex gap-2">
-                                                                <Input
-                                                                    type="color"
-                                                                    value={(selectedClip.style?.backgroundColor as string) || (selectedClip.style?.color as string) || '#ffffff'}
-                                                                    onChange={e => handleUpdateStyle(selectedClip.type === 'text' ? 'color' : 'backgroundColor', e.target.value)}
-                                                                    className="w-full h-8 p-1 cursor-pointer"
-                                                                />
-                                                            </div>
-                                                        </div>
-
-                                                        {selectedClip.type === 'text' && (
-                                                            <>
-                                                                <div className="space-y-1">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.fontFamily')}</Label>
-                                                                    <Select
-                                                                        value={(selectedClip.style?.fontFamily as string) || 'sans-serif'}
-                                                                        onValueChange={(val) => handleUpdateStyle('fontFamily', val)}
-                                                                    >
-                                                                        <SelectTrigger className="h-8 text-xs">
-                                                                            <SelectValue placeholder="Font" />
-                                                                        </SelectTrigger>
-                                                                        <SelectContent className="max-h-[300px]">
-                                                                            <SelectGroup>
-                                                                                <SelectLabel className="text-[10px] uppercase text-muted-foreground px-2 py-1.5">System</SelectLabel>
-                                                                                {SYSTEM_FONTS.map(f => (
-                                                                                    <SelectItem key={f.family} value={f.family}>{f.name}</SelectItem>
-                                                                                ))}
-                                                                            </SelectGroup>
-                                                                            <SelectSeparator />
-                                                                            <SelectGroup>
-                                                                                <SelectLabel className="text-[10px] uppercase text-muted-foreground px-2 py-1.5">Google Fonts</SelectLabel>
-                                                                                {GOOGLE_FONTS.map(f => (
-                                                                                    <SelectItem key={f.family} value={f.family}>{f.name}</SelectItem>
-                                                                                ))}
-                                                                            </SelectGroup>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.fontSize')}</Label>
-                                                                    <Input
-                                                                        type="number"
-                                                                        value={typeof selectedClip.style?.fontSize === 'string' ? parseInt(selectedClip.style.fontSize) : 80}
-                                                                        onChange={e => handleUpdateStyle('fontSize', `${e.target.value}px`)}
-                                                                        className="h-8 text-sm"
-                                                                    />
-                                                                </div>
-                                                                <div className="space-y-1">
-                                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.fontWeight')}</Label>
-                                                                    <Select
-                                                                        value={String(selectedClip.style?.fontWeight || 800)}
-                                                                        onValueChange={(val) => handleUpdateStyle('fontWeight', parseInt(val))}
-                                                                    >
-                                                                        <SelectTrigger className="h-8 text-xs">
-                                                                            <SelectValue placeholder="Weight" />
-                                                                        </SelectTrigger>
-                                                                        <SelectContent>
-                                                                            <SelectItem value="400">Normal (400)</SelectItem>
-                                                                            <SelectItem value="600">Semi Bold (600)</SelectItem>
-                                                                            <SelectItem value="800">Bold (800)</SelectItem>
-                                                                            <SelectItem value="900">Black (900)</SelectItem>
-                                                                        </SelectContent>
-                                                                    </Select>
-                                                                </div>
-                                                            </>
-                                                        )}
-                                                    </div>
-                                                )}
-                                            </CardContent>
-                                        </Card>
-
-                                        {/* Animation Card */}
-                                        <Card className="bg-secondary/20 border-border/40">
-                                            <CardHeader className="p-3 pb-0">
-                                                <CardTitle className="text-xs font-medium text-muted-foreground">{t('editor.properties.animation')}</CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="p-3 space-y-3">
-                                                <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.type')}</Label>
-                                                    <Select value={selectedClip.animation?.type || 'none'} onValueChange={(val) => handleUpdateAnimation('type', val)}>
-                                                        <SelectTrigger className="h-8 text-xs">
-                                                            <SelectValue placeholder="None" />
-                                                        </SelectTrigger>
-                                                        <SelectContent>
-                                                            <SelectItem value="none">None</SelectItem>
-                                                            <SelectItem value="fade">Fade In/Out</SelectItem>
-                                                            <SelectItem value="pop">Pop (Scale)</SelectItem>
-                                                            <SelectItem value="slide">Slide Up</SelectItem>
-                                                        </SelectContent>
-                                                    </Select>
-                                                </div>
-                                                <div className="space-y-1">
-                                                    <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.duration')}</Label>
-                                                    <Input
-                                                        type="number"
-                                                        value={selectedClip.animation?.duration || 0}
-                                                        onChange={e => handleUpdateAnimation('duration', Number(e.target.value))}
-                                                        className="h-8 text-sm"
-                                                    />
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-
-                                        <Card className="bg-secondary/20 border-border/40">
-                                            <CardHeader className="p-3 pb-0">
-                                                <CardTitle className="text-xs font-medium text-muted-foreground">{t('editor.properties.timing')}</CardTitle>
-                                            </CardHeader>
-                                            <CardContent className="p-3 space-y-3">
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.start')}</Label>
-                                                        <Input
-                                                            type="number"
-                                                            value={selectedClip.startFrame}
-                                                            onChange={e => handleUpdateClip('startFrame', Number(e.target.value))}
-                                                            className="h-8 text-sm"
-                                                        />
-                                                    </div>
-                                                    <div className="space-y-1">
-                                                        <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.measured')}</Label>
-                                                        <Input
-                                                            type="number"
-                                                            value={selectedClip.durationInFrames}
-                                                            onChange={e => handleUpdateClip('durationInFrames', Number(e.target.value))}
-                                                            className="h-8 text-sm"
-                                                        />
-                                                    </div>
-                                                </div>
-                                            </CardContent>
-                                        </Card>
-                                    </div>
-                                ) : (
-                                    <div className="flex flex-col items-center justify-center h-48 text-muted-foreground space-y-2 opacity-50">
-                                        <Layers size={32} />
-                                        <p className="text-sm">{t('editor.properties.noSelection')}</p>
-                                    </div>
-                                )}
-
-                                <div className="pt-4 border-t border-border/50">
-                                    <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground mb-3">{t('editor.addElement')}</h2>
-                                    <div className="grid grid-cols-4 gap-2">
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('text')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'text' }));
-                                            }}
-                                        >
-                                            <FileText size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.text')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('video')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'video' }));
-                                            }}
-                                        >
-                                            <VideoIcon size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.video')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('image')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'image' }));
-                                            }}
-                                        >
-                                            <ImageIcon size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.image')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('audio')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'audio', content: 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' }));
-                                            }}
-                                        >
-                                            <Volume2 size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.audio')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('shape', 'rect')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'shape', content: 'rect' }));
-                                            }}
-                                        >
-                                            <Square size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.rect')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('shape', 'circle')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'shape', content: 'circle' }));
-                                            }}
-                                        >
-                                            <Circle size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.circle')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('code')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'code', content: 'console.log("Hello World");' }));
-                                            }}
-                                        >
-                                            <Code2 size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.code')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('flow')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'flow', content: 'New Flow' }));
-                                            }}
-                                        >
-                                            <Grid size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.flow')}</span>
-                                        </Button>
-                                        <Button
-                                            variant="outline" size="sm" className="flex flex-col h-16 gap-1 border-dashed hover:border-primary hover:bg-primary/10 cursor-grab active:cursor-grabbing"
-                                            onClick={() => addClip('image', 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif')}
-                                            draggable
-                                            onDragStart={(e) => {
-                                                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({ type: 'image', content: 'https://media.giphy.com/media/v1.Y2lkPTc5MGI3NjExM2E5eG56eG56eG56eG56eG56eG56eG5/3o7aD2saalBwwftBIY/giphy.gif' }));
-                                            }}
-                                        >
-                                            <Smile size={16} />
-                                            <span className="text-[10px]">{t('editor.elements.gif')}</span>
-                                        </Button>
-                                    </div>
-                                </div>
-
-                                <div className="pt-4 border-t border-border/50">
-                                    <Label className="text-xs text-muted-foreground mb-2 block">{t('editor.globalColor')}</Label>
-                                    <div className="flex gap-2">
-                                        <div className="relative">
-                                            <Input
-                                                type="color"
-                                                value={primaryColor}
-                                                onChange={e => setPrimaryColor(e.target.value)}
-                                                className="w-10 h-8 p-1 cursor-pointer rounded-md overflow-hidden"
-                                            />
-                                        </div>
-                                        <Input
-                                            value={primaryColor}
-                                            onChange={e => setPrimaryColor(e.target.value)}
-                                            className="flex-1 h-8 font-mono uppercase bg-background/50 border-border/50"
-                                        />
-                                    </div>
-                                </div>
-
-                            </>
+                            <PropertiesPanel
+                                selectedClip={selectedClip}
+                                currentFrame={currentFrame}
+                                localVolume={localVolume}
+                                setLocalVolume={setLocalVolume}
+                                handleUpdateClip={handleUpdateClip}
+                                handleBatchUpdateClip={handleBatchUpdateClip}
+                                handleUpdateStyle={handleUpdateStyle}
+                                handleUpdateAnimation={handleUpdateAnimation}
+                                removeClip={removeClip}
+                                addClip={addClip}
+                                tachiePresets={tachiePresets}
+                                setTachiePresets={setTachiePresets}
+                                availableLayers={availableLayers}
+                                collapsedPaths={collapsedPaths}
+                                setCollapsedPaths={setCollapsedPaths}
+                                pathsWithChildren={pathsWithChildren}
+                                aiVoicePresets={aiVoicePresets}
+                                selectedAiVoicePreset={selectedAiVoicePreset}
+                                setSelectedAiVoicePreset={setSelectedAiVoicePreset}
+                                isSynthesizing={isSynthesizing}
+                                setIsSynthesizing={setIsSynthesizing}
+                                primaryColor={primaryColor}
+                                setPrimaryColor={setPrimaryColor}
+                                t={t}
+                            />
                         ) : (
-                            <div className="space-y-4 animate-in slide-in-from-right duration-300">
-                                {/* Upload Box */}
-                                <div
-                                    className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
-                                    onClick={() => document.getElementById('asset-upload')?.click()}
-                                >
-                                    <input
-                                        type="file"
-                                        id="asset-upload"
-                                        className="hidden"
-                                        onChange={handleFileUpload}
-                                        accept="image/*,video/*,audio/*,.mkv,.flac,.ogg,.wav,.aac,.m4a,.mov,.webm,.webp,.svg,.bmp,.avif"
-                                    />
-                                    <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
-                                        {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}
-                                    </div>
-                                    <div className="text-center">
-                                        <p className="text-xs font-medium text-foreground">{t('editor.assets.upload.title')}</p>
-                                        <p className="text-[10px] text-muted-foreground">{t('editor.assets.upload.subtitle')}</p>
-                                    </div>
-                                </div>
-
-                                {/* Asset Grid */}
-                                <div>
-                                    <div className="flex items-center justify-between mb-2">
-                                        <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('editor.assets.library')}</h2>
-                                        <span className="text-[10px] text-muted-foreground">{assets.length} {t('editor.items')}</span>
-                                    </div>
-
-                                    {assets.length === 0 ? (
-                                        <div className="text-center py-8 text-muted-foreground">
-                                            <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
-                                            <p className="text-xs">{t('editor.assets.empty')}</p>
-                                        </div>
-                                    ) : (
-                                        <div className="grid grid-cols-2 gap-2">
-                                            {assets.map((asset, i) => (
-                                                <div
-                                                    key={i}
-                                                    draggable
-                                                    onDragStart={(e) => {
-                                                        e.dataTransfer.setData('application/omoti-clip', JSON.stringify({
-                                                            type: asset.type,
-                                                            content: asset.url,
-                                                            duration: asset.duration
-                                                        }));
-                                                    }}
-                                                    className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all cursor-grab active:cursor-grabbing"
-                                                    onClick={() => addClip(asset.type, asset.url, asset.duration)}
-                                                    title={`${asset.name} ${asset.duration ? `(${asset.duration.toFixed(1)}s)` : ''}`}
-                                                >
-                                                    {asset.type === 'video' ? (
-                                                        <video src={asset.url} className="w-full h-full object-cover pointer-events-none" />
-                                                    ) : asset.type === 'audio' ? (
-                                                        <div className="w-full h-full flex items-center justify-center bg-secondary/50">
-                                                            <Volume2 className="text-muted-foreground" size={24} />
-                                                        </div>
-                                                    ) : asset.type === 'tachie' ? (
-                                                        <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/50 gap-2">
-                                                            <Layers className="text-muted-foreground" size={24} />
-                                                            <span className="text-[8px] uppercase tracking-widest text-muted-foreground font-bold">PSD</span>
-                                                        </div>
-                                                    ) : (
-                                                        <img src={asset.url} alt={asset.name} className="w-full h-full object-cover pointer-events-none" />
-                                                    )}
-                                                    <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                                        <Plus className="text-white drop-shadow-md" size={20} />
-                                                    </div>
-                                                    <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 pt-4">
-                                                        <p className="text-[10px] text-white truncate px-0.5">{asset.name}</p>
-                                                    </div>
-                                                </div>
-                                            ))}
-                                        </div>
-                                    )}
-                                </div>
-                            </div>
+                            <AssetsPanel
+                                handleFileUpload={handleFileUpload}
+                                isUploading={isUploading}
+                                assets={assets}
+                                addClip={addClip}
+                                t={t}
+                            />
                         )}
                     </div>
                 </aside>

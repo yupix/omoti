@@ -28,7 +28,8 @@
             "duration": "Duration (Frames)",
             "timing": "Timing",
             "start": "Start",
-            "measured": "Measured"
+            "measured": "Measured",
+            "generateVoice": "Synthesize Voice (AIVOICE)"
         },
         "assets": {
             "upload": {

@@ -28,7 +28,8 @@
             "duration": "時間 (フレーム)",
             "timing": "タイミング",
             "start": "開始",
-            "measured": "長さ"
+            "measured": "長さ",
+            "generateVoice": "音声合成 (AIVOICE)"
         },
         "assets": {
             "upload": {
