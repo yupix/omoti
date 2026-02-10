@@ -17,6 +17,7 @@
             "timelinePreview": "Timeline Preview",
             "keyframes": "Keyframes",
             "addEffect": "Add Effect at Playhead",
+            "savePreset": "Save Preset",
             "startOffset": "Start Offset (Frames)",
             "color": "Color",
             "fontFamily": "Font Family",

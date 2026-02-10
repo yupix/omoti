@@ -7,7 +7,6 @@ import { Card, CardContent, CardHeader, CardTitle, CardTitle as CTitle } from '@
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon, Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square, Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock, Upload, Grid, Scissors } from 'lucide-react';
 import { Clip, Track, ClipType, CodeStep } from '@/types';
 import { Timeline } from './Timeline';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -15,7 +14,13 @@ import { InteractOverlay } from './InteractOverlay';
 import { bundledLanguages } from 'shiki';
 import '@/lib/i18n'; // Initialize i18n
 import { useTranslation } from 'react-i18next';
-import { Globe } from 'lucide-react';
+import {
+    Download, Layers, Box, Plus, Trash2, Calendar, FileText, Video as VideoIcon,
+    Image as ImageIcon, Play, Pause, SkipBack, SkipForward, Volume2, Square,
+    Circle, Code2, Smile, Loader2, Save, FolderOpen, Copy, Clock, Upload,
+    Grid, Scissors, Globe, CheckSquare, ChevronDown, ChevronRight, Bookmark, PlusSquare
+} from 'lucide-react';
+import { readPsd } from 'ag-psd';
 
 const INITIAL_TRACKS: Track[] = [
     { id: 1, name: 'Overlay Text' },
@@ -31,7 +36,7 @@ const INITIAL_CLIPS: Clip[] = [
 interface Asset {
     name: string;
     url: string;
-    type: 'image' | 'video' | 'audio';
+    type: 'image' | 'video' | 'audio' | 'tachie';
     duration?: number; // in seconds
 }
 
@@ -65,6 +70,27 @@ export default function Editor() {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [localVolume, setLocalVolume] = useState<number | null>(null);
+    const [availableLayers, setAvailableLayers] = useState<string[]>([]);
+    const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
+    const [pathsWithChildren, setPathsWithChildren] = useState<Set<string>>(new Set());
+    const [tachiePresets, setTachiePresets] = useState<{ id: string; name: string; assetUrl: string; layers: string[] }[]>([]);
+
+    // Load tachie presets from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem('omoti_tachie_presets');
+        if (saved) {
+            try {
+                setTachiePresets(JSON.parse(saved));
+            } catch (e) {
+                console.error('Failed to parse tachie presets', e);
+            }
+        }
+    }, []);
+
+    // Save tachie presets to localStorage
+    useEffect(() => {
+        localStorage.setItem('omoti_tachie_presets', JSON.stringify(tachiePresets));
+    }, [tachiePresets]);
 
     // Fetch assets on load
     useEffect(() => {
@@ -76,7 +102,8 @@ export default function Editor() {
                         const origin = window.location.origin;
                         const fullUrl = `${origin}/uploads/${f.name}`;
                         const type = f.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
-                            f.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' : 'image';
+                            f.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' :
+                                f.name.match(/\.psd$/i) ? 'tachie' : 'image';
                         let duration = 0;
                         if (type === 'video' || type === 'audio') {
                             duration = await getMediaDuration(fullUrl, type);
@@ -114,7 +141,8 @@ export default function Editor() {
 
             // Refresh assets
             const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
-                data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' : 'image';
+                data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
+                    data.name.match(/\.psd$/i) ? 'tachie' : 'image';
 
             const origin = window.location.origin;
             const fullUrl = `${origin}${data.url}`;
@@ -151,6 +179,54 @@ export default function Editor() {
     const inputProps = useMemo(() => ({ clips, primaryColor }), [clips, primaryColor]);
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
+
+    // Parse PSD layers when a tachie clip is selected
+    useEffect(() => {
+        if (selectedClip && selectedClip.type === 'tachie') {
+            const loadLayers = async () => {
+                try {
+                    const response = await fetch(selectedClip.content);
+                    const buffer = await response.arrayBuffer();
+                    // Just read structure, skip images for speed
+                    const psd = readPsd(buffer, { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+
+                    const names: string[] = [];
+                    const defaultVisible: string[] = [];
+                    const withChildren: string[] = [];
+                    const extractNames = (layers: any[], parentPath: string = '', parentVisible: boolean = true) => {
+                        // ag-psd returns layers from bottom to top.
+                        // For the UI list, we want top to bottom (like Photoshop).
+                        [...layers].reverse().forEach(l => {
+                            const currentPath = parentPath ? `${parentPath}/${l.name}` : (l.name || 'Unnamed Layer');
+                            names.push(currentPath);
+                            const isVisible = parentVisible && !l.hidden;
+                            if (isVisible) {
+                                defaultVisible.push(currentPath);
+                            }
+                            if (l.children && l.children.length > 0) {
+                                withChildren.push(currentPath);
+                                extractNames(l.children, currentPath, isVisible);
+                            }
+                        });
+                    };
+                    if (psd.children) extractNames(psd.children);
+                    setAvailableLayers(names);
+                    setPathsWithChildren(new Set(withChildren));
+
+                    // Initialize tachieLayers if empty
+                    if (!selectedClip.tachieLayers || selectedClip.tachieLayers.length === 0) {
+                        handleUpdateClip('tachieLayers', defaultVisible);
+                    }
+                } catch (e) {
+                    console.error('Failed to parse PSD layers:', e);
+                    setAvailableLayers([]);
+                }
+            };
+            loadLayers();
+        } else {
+            setAvailableLayers([]);
+        }
+    }, [selectedClip?.id, selectedClip?.content, selectedClip?.type]);
 
     // Sync local volume state when selected clip changes
     useEffect(() => {
@@ -679,7 +755,7 @@ export default function Editor() {
                                                 <div className="space-y-1">
                                                     <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.value')}</Label>
                                                     {selectedClip.type === 'code' ? (
-                                                        <div className="space-y-2">
+                                                        <div className="space-y-4">
                                                             <div className="space-y-1">
                                                                 <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.language')}</Label>
                                                                 <Select
@@ -748,10 +824,7 @@ export default function Editor() {
                                                                         size="sm" variant="secondary" className="h-6 px-2 text-[10px] hover:bg-primary hover:text-primary-foreground"
                                                                         onClick={() => {
                                                                             const offset = Math.max(0, currentFrame - selectedClip.startFrame);
-                                                                            // Allow adding slightly past end? No, strictly inside or at end.
-
                                                                             const steps = selectedClip.steps || [];
-                                                                            // Find currently active code to copy
                                                                             const prevStep = [...steps].reverse().find(s => s.frameOffset <= offset);
                                                                             const baseCode = prevStep ? prevStep.code : selectedClip.content;
 
@@ -767,7 +840,7 @@ export default function Editor() {
                                                                     </Button>
                                                                 </div>
 
-                                                                <div className="space-y-4 max-h-[400px] overflow-y-auto pr-2">
+                                                                <div className="space-y-4 max-h-[300px] overflow-y-auto pr-2">
                                                                     {(selectedClip.steps || [{ code: selectedClip.content, frameOffset: 0 }]).map((step, index) => (
                                                                         <div key={index} className="space-y-2 p-2 rounded-md border border-border bg-background/50 relative group">
                                                                             <div className="flex items-start gap-2 mb-1">
@@ -825,6 +898,122 @@ export default function Editor() {
                                                                             />
                                                                         </div>
                                                                     ))}
+                                                                </div>
+                                                            </div>
+                                                        </div>
+                                                    ) : selectedClip.type === 'tachie' ? (
+                                                        <div className="space-y-4">
+                                                            <div className="space-y-2">
+                                                                <div className="flex items-center justify-between">
+                                                                    <Label className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">
+                                                                        <Bookmark size={10} /> Presets
+                                                                    </Label>
+                                                                    <Button
+                                                                        size="sm" variant="outline" className="h-6 px-2 text-[10px] gap-1"
+                                                                        onClick={() => {
+                                                                            const name = prompt('Preset Name:');
+                                                                            if (!name) return;
+                                                                            const newPreset = {
+                                                                                id: Math.random().toString(36).substr(2, 9),
+                                                                                name,
+                                                                                assetUrl: selectedClip.content,
+                                                                                layers: selectedClip.tachieLayers || []
+                                                                            };
+                                                                            setTachiePresets([...tachiePresets, newPreset]);
+                                                                        }}
+                                                                    >
+                                                                        <Plus size={10} /> {t('editor.properties.savePreset')}
+                                                                    </Button>
+                                                                </div>
+                                                                <div className="flex flex-wrap gap-1.5">
+                                                                    {tachiePresets.filter(p => p.assetUrl === selectedClip.content).length === 0 ? (
+                                                                        <span className="text-[10px] text-muted-foreground italic">No presets for this asset.</span>
+                                                                    ) : (
+                                                                        tachiePresets.filter(p => p.assetUrl === selectedClip.content).map(preset => (
+                                                                            <div key={preset.id} className="relative group">
+                                                                                <Button
+                                                                                    size="sm" variant="secondary" className="h-6 px-3 text-[10px] bg-primary/10 hover:bg-primary/20 border-primary/20 transition-colors"
+                                                                                    onClick={() => handleUpdateClip('tachieLayers', preset.layers)}
+                                                                                >
+                                                                                    {preset.name}
+                                                                                </Button>
+                                                                                <button
+                                                                                    className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full size-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
+                                                                                    onClick={(e) => {
+                                                                                        e.stopPropagation();
+                                                                                        setTachiePresets(tachiePresets.filter(p => p.id !== preset.id));
+                                                                                    }}
+                                                                                >
+                                                                                    <Trash2 size={8} />
+                                                                                </button>
+                                                                            </div>
+                                                                        ))
+                                                                    )}
+                                                                </div>
+                                                            </div>
+
+                                                            <div className="space-y-2">
+                                                                <Label className="text-[10px] uppercase text-muted-foreground">Visible Layers</Label>
+                                                                <div className="max-h-60 overflow-y-auto border border-border rounded-md p-2 bg-background/50 space-y-1 scrollbar-thin scrollbar-thumb-primary/20 hover:scrollbar-thumb-primary/40">
+                                                                    {availableLayers.length === 0 ? (
+                                                                        <p className="text-[10px] text-muted-foreground text-center py-4 italic">No layers found or loading structure...</p>
+                                                                    ) : (
+                                                                        availableLayers.filter(path => {
+                                                                            // Hide if any of its parent paths are collapsed
+                                                                            const parts = path.split('/');
+                                                                            for (let i = 1; i < parts.length; i++) {
+                                                                                const parentPath = parts.slice(0, i).join('/');
+                                                                                if (collapsedPaths.has(parentPath)) return false;
+                                                                            }
+                                                                            return true;
+                                                                        }).map((path, idx) => {
+                                                                            const isActive = (selectedClip.tachieLayers || []).includes(path);
+                                                                            const isCollapsed = collapsedPaths.has(path);
+                                                                            const hasChildren = pathsWithChildren.has(path);
+                                                                            const parts = path.split('/');
+                                                                            const name = parts[parts.length - 1];
+                                                                            const indent = parts.length - 1;
+
+                                                                            return (
+                                                                                <div
+                                                                                    key={idx}
+                                                                                    className="flex items-center gap-1 hover:bg-primary/10 px-2 py-0.5 rounded-sm cursor-default group transition-colors"
+                                                                                    style={{ paddingLeft: `${indent * 12 + 4}px` }}
+                                                                                >
+                                                                                    <div
+                                                                                        className="size-4 flex items-center justify-center cursor-pointer hover:bg-primary/20 rounded transition-colors"
+                                                                                        onClick={(e) => {
+                                                                                            e.stopPropagation();
+                                                                                            if (!hasChildren) return;
+                                                                                            const next = new Set(collapsedPaths);
+                                                                                            if (isCollapsed) next.delete(path);
+                                                                                            else next.add(path);
+                                                                                            setCollapsedPaths(next);
+                                                                                        }}
+                                                                                    >
+                                                                                        {hasChildren && (
+                                                                                            isCollapsed ? <ChevronRight size={10} className="text-muted-foreground" /> : <ChevronDown size={10} className="text-muted-foreground" />
+                                                                                        )}
+                                                                                    </div>
+                                                                                    <div
+                                                                                        className="flex items-center gap-2 flex-1 cursor-pointer"
+                                                                                        onClick={() => {
+                                                                                            const current = selectedClip.tachieLayers || [];
+                                                                                            const next = current.includes(path)
+                                                                                                ? current.filter(l => l !== path)
+                                                                                                : [...current, path];
+                                                                                            handleUpdateClip('tachieLayers', next);
+                                                                                        }}
+                                                                                    >
+                                                                                        <div className={`size-3.5 rounded border-2 flex-shrink-0 transition-all flex items-center justify-center ${isActive ? 'bg-primary border-primary' : 'bg-transparent border-muted-foreground/30'}`}>
+                                                                                            {isActive && <CheckSquare size={10} className="text-primary-foreground" />}
+                                                                                        </div>
+                                                                                        <span className={`text-[10px] truncate select-none flex-1 ${isActive ? 'text-foreground font-semibold' : 'text-muted-foreground'}`}>{name}</span>
+                                                                                    </div>
+                                                                                </div>
+                                                                            );
+                                                                        })
+                                                                    )}
                                                                 </div>
                                                             </div>
                                                         </div>
@@ -1144,6 +1333,11 @@ export default function Editor() {
                                                         <div className="w-full h-full flex items-center justify-center bg-secondary/50">
                                                             <Volume2 className="text-muted-foreground" size={24} />
                                                         </div>
+                                                    ) : asset.type === 'tachie' ? (
+                                                        <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/50 gap-2">
+                                                            <Layers className="text-muted-foreground" size={24} />
+                                                            <span className="text-[8px] uppercase tracking-widest text-muted-foreground font-bold">PSD</span>
+                                                        </div>
                                                     ) : (
                                                         <img src={asset.url} alt={asset.name} className="w-full h-full object-cover pointer-events-none" />
                                                     )}
@@ -1227,7 +1421,7 @@ export default function Editor() {
                                     currentFrame >= c.startFrame &&
                                     currentFrame < c.startFrame + c.durationInFrames &&
                                     c.id !== selectedClipId &&
-                                    ['text', 'image', 'shape', 'code'].includes(c.type) // Only positionable types
+                                    ['text', 'image', 'shape', 'code', 'tachie'].includes(c.type) // Only positionable types
                                 ).map(clip => {
                                     const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
                                     const x = isPositioned ? (clip.x || 0) : 0;

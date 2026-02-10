@@ -1,4 +1,4 @@
-export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code';
+export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code' | 'tachie';
 
 
 export interface Clip {
@@ -7,7 +7,7 @@ export interface Clip {
     trackId: number;
     startFrame: number;
     durationInFrames: number;
-    content: string; // Text content or Image/Video URL
+    content: string; // Text content or Image/Video/PSD URL
     style?: React.CSSProperties; // Simple styling for now
     title?: string; // For display in timeline
     animation?: {
@@ -25,6 +25,7 @@ export interface Clip {
     mediaStartOffset?: number; // Offset in frames from the start of the media file
     playbackRate?: number; // Playback speed (default 1)
     volume?: number; // Audio volume (0-1, default 1)
+    tachieLayers?: string[]; // IDs or paths of visible layers for PSD
 }
 
 export interface CodeStep {

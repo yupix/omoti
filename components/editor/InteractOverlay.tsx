@@ -172,7 +172,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     if (!clip) return null;
 
     // Only text, image, shape, code support positioning for now
-    if (!['text', 'image', 'shape', 'code'].includes(clip.type)) return null;
+    if (!['text', 'image', 'shape', 'code', 'tachie'].includes(clip.type)) return null;
 
     // Calculate percentage styles for the overlay box
     const style: React.CSSProperties = {

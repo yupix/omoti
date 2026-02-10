@@ -3,6 +3,7 @@ import { Gif } from '@remotion/gif';
 import React from 'react';
 import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
+import { TachieRenderer } from './TachieRenderer';
 
 const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
     const frame = useCurrentFrame();
@@ -209,6 +210,14 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                     borderRadius: isCircle ? '50%' : '0px',
                     ...clip.style
                 }} />
+            </div>
+        );
+    }
+
+    if (clip.type === 'tachie') {
+        return (
+            <div style={positionStyle}>
+                <TachieRenderer clip={clip} />
             </div>
         );
     }
