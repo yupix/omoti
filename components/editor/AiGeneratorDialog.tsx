@@ -19,7 +19,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
     const [apiKey, setApiKey] = useState('');
     const [provider, setProvider] = useState('openai');
     const [selectedTachieUrls, setSelectedTachieUrls] = useState<string[]>([]);
-    const [tachieData, setTachieData] = useState<{ name: string, url: string, layers: string[] }[]>([]);
+    const [tachieData, setTachieData] = useState<{ id: string, name: string, url: string, layers: string[], role: string }[]>([]);
     const [loadingLayers, setLoadingLayers] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
@@ -41,6 +41,9 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
             setLoadingLayers(true);
             try {
                 const newData = await Promise.all(selectedTachieUrls.map(async (url) => {
+                    const existing = tachieData.find(t => t.url === url);
+                    if (existing && existing.layers.length > 0) return existing;
+
                     const tachie = availableTachies.find(t => t.url === url);
                     const name = tachie?.name || 'Unknown';
 
@@ -57,8 +60,9 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                         });
                     };
                     if (psd.children) traverse(psd.children);
-                    return { name, url, layers: layerNames };
+                    return { id: url, name, url, layers: layerNames, role: existing?.role || '' };
                 }));
+                // Filter out any duplicates and keep states
                 setTachieData(newData);
             } catch (e) {
                 console.error("Failed to extract PSD layers", e);
@@ -67,7 +71,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
             }
         };
         extractAllLayers();
-    }, [selectedTachieUrls, availableTachies]);
+    }, [selectedTachieUrls]);
 
     const handleGenerate = async () => {
         if (!prompt.trim()) return;
@@ -84,7 +88,12 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                     prompt,
                     apiKey,
                     provider,
-                    tachies: tachieData
+                    tachies: tachieData.map(t => ({
+                        name: t.name,
+                        role: t.role,
+                        layers: t.layers,
+                        url: t.url
+                    }))
                 })
             });
 
@@ -116,16 +125,20 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
         );
     };
 
+    const updateTachieInfo = (url: string, field: 'name' | 'role', value: string) => {
+        setTachieData(prev => prev.map(t => t.url === url ? { ...t, [field]: value } : t));
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
-            <DialogContent className="sm:max-w-[500px]">
+            <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
                 <DialogHeader>
                     <DialogTitle className="flex items-center gap-2">
                         <Sparkles className="text-purple-500" size={20} />
                         AI Video Generator
                     </DialogTitle>
                     <DialogDescription>
-                        Describe the video you want to create (e.g., "Explain React useMemo").
+                        Describe the video you want to create and configure your characters.
                     </DialogDescription>
                 </DialogHeader>
 
@@ -164,27 +177,57 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                         </div>
                     </div>
 
-                    <div className="grid gap-2">
-                        <label className="text-sm font-medium">Characters (Tachie)</label>
-                        <div className="grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto p-2 border rounded-md">
-                            {availableTachies.map((t, idx) => (
-                                <label key={idx} className="flex items-center gap-2 p-1 hover:bg-secondary/50 rounded cursor-pointer">
-                                    <input
-                                        type="checkbox"
-                                        checked={selectedTachieUrls.includes(t.url)}
-                                        onChange={() => toggleTachie(t.url)}
-                                        className="rounded border-gray-300"
-                                    />
-                                    <span className="text-xs truncate">{t.name}</span>
-                                </label>
-                            ))}
-                            {availableTachies.length === 0 && <span className="text-xs text-muted-foreground">No PSDs found</span>}
+                    <div className="grid gap-4">
+                        <label className="text-sm font-medium">Characters (Tachie) Selection & Roles</label>
+                        <div className="grid gap-3 max-h-[300px] overflow-y-auto p-2 border rounded-md bg-secondary/20">
+                            {availableTachies.map((t, idx) => {
+                                const isSelected = selectedTachieUrls.includes(t.url);
+                                const data = tachieData.find(d => d.url === t.url);
+
+                                return (
+                                    <div key={idx} className={`p-3 border rounded-lg transition-all ${isSelected ? 'bg-primary/5 border-primary/30 shadow-sm' : 'bg-transparent border-transparent'}`}>
+                                        <div className="flex items-center gap-3 mb-2">
+                                            <input
+                                                type="checkbox"
+                                                checked={isSelected}
+                                                onChange={() => toggleTachie(t.url)}
+                                                className="w-4 h-4 rounded border-gray-300"
+                                            />
+                                            {isSelected ? (
+                                                <Input
+                                                    value={data?.name || t.name}
+                                                    onChange={(e) => updateTachieInfo(t.url, 'name', e.target.value)}
+                                                    className="h-7 text-xs font-bold bg-background/50"
+                                                    placeholder="Character Name"
+                                                />
+                                            ) : (
+                                                <span className="text-xs font-medium text-muted-foreground">{t.name}</span>
+                                            )}
+                                        </div>
+                                        {isSelected && (
+                                            <div className="grid gap-1.5 ml-7">
+                                                <label className="text-[10px] font-semibold text-muted-foreground uppercase flex items-center justify-between">
+                                                    AI Role / Personality
+                                                    {data?.layers && <span className="text-primary/70">{data.layers.length} layers</span>}
+                                                </label>
+                                                <Input
+                                                    placeholder="Teacher, grumpy student, energetic assistant..."
+                                                    value={data?.role || ''}
+                                                    onChange={(e) => updateTachieInfo(t.url, 'role', e.target.value)}
+                                                    className="h-7 text-xs bg-background/50"
+                                                />
+                                            </div>
+                                        )}
+                                    </div>
+                                );
+                            })}
+                            {availableTachies.length === 0 && <span className="text-xs text-center py-4 text-muted-foreground">No PSDs found in assets.</span>}
                         </div>
                         <p className="text-[10px] text-muted-foreground flex items-center gap-1">
                             {loadingLayers ? (
                                 <><Loader2 size={10} className="animate-spin" /> Analyzing PSDs...</>
                             ) : (
-                                `Selected ${selectedTachieUrls.length} characters for auto-expression.`
+                                `Give characters roles to help the AI write better dialogue.`
                             )}
                         </p>
                     </div>

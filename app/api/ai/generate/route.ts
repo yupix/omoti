@@ -34,6 +34,7 @@ export async function POST(req: NextRequest) {
             AVAILABLE CHARACTERS:
             ${tachies.map((t: any) => `
             - Character Name: "${t.name}"
+              Role/Personality: "${t.role || 'General assistant'}"
               Layers: ${JSON.stringify(t.layers)}
             `).join('\n')}
 
@@ -44,11 +45,12 @@ export async function POST(req: NextRequest) {
             4. Use total layer paths from the provided list for each character.
             5. Identify base layers (Body, Hair, Clothes) and expression layers.
             6. Each SCENE must specify which "character" is speaking.
+            7. Tailor the dialogue and emotions based on the Role/Personality provided for each character.
             `;
         }
 
         const systemInstruction = `You are a video script generator for a tech tutorial or commentary channel.
-            Generate a JSON structure for a short video.
+            Generate a JSON structure for a comprehensive video.
             The output must strictly follow this JSON schema:
             {
               "title": "Video Title",
@@ -60,7 +62,7 @@ export async function POST(req: NextRequest) {
               },
               "scenes": [
                 {
-                  "text": "Spoken dialogue line",
+                  "text": "Detailed spoken dialogue line. Aim for 30-50 words per scene to ensure thorough explanation.",
                   "character": "CharacterName",
                   "emotion": "neutral" | "happy" | "sad" | "surprised" | "serious",
                   "action": "intro" | "explain" | "code" | "summary" | "outro",
@@ -75,9 +77,10 @@ export async function POST(req: NextRequest) {
               ]
             }
             ${characterContext}
-            Keep the total scenes between 5 and 10.
+            Total scenes: exactly 15 scenes (or between 12 and 20 if needed for flow).
             Language: Japanese (unless requested otherwise).
-            Use a friendly tone.
+            Tone: Informative, engaging, and detailed.
+            Provide deep explanations rather than just surface-level summaries.
             IMPORTANT: Return ONLY valid JSON.`;
 
         try {
