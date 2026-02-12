@@ -36,16 +36,25 @@ export async function POST(req: NextRequest) {
             - Character Name: "${t.name}"
               Role/Personality: "${t.role || 'General assistant'}"
               Layers: ${JSON.stringify(t.layers)}
+              ${t.rules ? `
+              LAYER RULES:
+              - Mandatory Groups (Character's base appearance - DO NOT INCLUDE these in your emotion layer lists, they are added automatically): ${JSON.stringify(t.rules.mandatory)}
+              - Exclusive Groups (Pick EXACTLY ONE leaf-layer path from each of these folders for every emotion/pose you define): ${JSON.stringify(t.rules.exclusive.map((e: any) => e.path))}
+              - Optional Groups (Extra details like sweat, anger marks. You MAY include zero or more leaf-layer paths from these folders to enhance the emotion): ${JSON.stringify(t.rules.optional || [])}
+              ` : ''}
             `).join('\n')}
 
             INSTRUCTIONS FOR TACHIE (CHARACTER):
             1. You MUST generate a "tachieConfigs" object in the JSON root.
-            2. "tachieConfigs" is a map: { [characterName: string]: { [emotion: string]: string[] } }.
+            2. "tachieConfigs" is a map: { [characterName: string]: { [emotion: string]: string[], "mouthOpen": string[], "mouthClosed": string[] } }.
             3. For EACH character used in the script, define their layer sets for "neutral", "happy", "sad", "surprised", "serious".
-            4. Use total layer paths from the provided list for each character.
-            5. Identify base layers (Body, Hair, Clothes) and expression layers.
-            6. Each SCENE must specify which "character" is speaking.
-            7. Tailor the dialogue and emotions based on the Role/Personality provided for each character.
+            4. Define "mouthOpen" (e.g., layers with "口", "あ", "開") and "mouthClosed" (e.g., layers with "口", "ん", "閉").
+            5. The "neutral"/"happy"/etc. sets should generally include a default "closed" mouth layer.
+            6. Use total layer paths from the provided list for each character.
+            7. Identify base layers (Body, Hair, Clothes) and expression layers.
+            8. Each SCENE must specify which "character" is speaking.
+            9. Tailor the dialogue and emotions based on the Role/Personality provided for each character.
+            10. IMPORTANT: If LAYER RULES are provided, they are ABSOLUTE. For Exclusive Groups, you MUST choose exactly one layer path that starts with that folder path for EVERY set you define.
             `;
         }
 
@@ -56,8 +65,10 @@ export async function POST(req: NextRequest) {
               "title": "Video Title",
               "tachieConfigs": {
                 "CharacterName": {
-                   "neutral": ["Layer/Path/1", "Layer/Path/2"],
-                   "happy": ["Layer/Path/1", "Layer/Path/3"]
+                   "neutral": ["Layer/Body", "Layer/Eyes/Normal", "Layer/Mouth/Closed"],
+                   "happy": ["Layer/Body", "Layer/Eyes/Happy", "Layer/Mouth/Closed"],
+                   "mouthOpen": ["Layer/Mouth/Open"],
+                   "mouthClosed": ["Layer/Mouth/Closed"]
                 }
               },
               "scenes": [
@@ -280,13 +291,20 @@ export async function POST(req: NextRequest) {
                 tachieLayout = { x: 0, y: 150, width: 600, height: 600 };
             }
 
+            let mouthOpenLayers: string[] = [];
+            let mouthClosedLayers: string[] = [];
+
             // Layer Resolution
             if (scriptData.tachieConfigs && scriptData.tachieConfigs[sceneCharacterName]) {
                 const config = scriptData.tachieConfigs[sceneCharacterName];
                 tachieLayers = config[emotion] || config['neutral'] || [];
+                mouthOpenLayers = config.mouthOpen || [];
+                mouthClosedLayers = config.mouthClosed || [];
             } else if (scriptData.tachieConfig && !sceneCharacterName) {
                 // Backward compatibility / Single character mode
                 tachieLayers = scriptData.tachieConfig[emotion] || scriptData.tachieConfig['neutral'] || [];
+                mouthOpenLayers = scriptData.tachieConfig.mouthOpen || [];
+                mouthClosedLayers = scriptData.tachieConfig.mouthClosed || [];
             } else {
                 // Fallback: Hardcoded Akane Logic
                 const AKANE_BASE_LAYERS = [
@@ -309,6 +327,10 @@ export async function POST(req: NextRequest) {
 
                 const emotionLayers = TACHIE_EMOTIONS[emotion] || TACHIE_EMOTIONS['neutral'];
                 tachieLayers = [...AKANE_BASE_LAYERS, ...emotionLayers];
+
+                // Fallback Mouth Sync
+                mouthOpenLayers = ['琴葉姉妹/!表情/口/*あ'];
+                mouthClosedLayers = ['琴葉姉妹/!表情/口/*ん', '琴葉姉妹/!表情/口/*ｖ'];
             }
 
             clips.push({
@@ -325,6 +347,10 @@ export async function POST(req: NextRequest) {
                 height: tachieLayout.height,
                 tachieLayers: tachieLayers,
                 effects: scene.effects || [],
+                audioUrl: audioUrl,
+                mouthOpenLayers,
+                mouthClosedLayers,
+                mandatoryLayers: targetCharacter?.rules?.mandatory || [],
                 animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
             });
 

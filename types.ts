@@ -29,6 +29,10 @@ export interface Clip {
     nodes?: any[]; // Nodes for ReactFlow
     edges?: any[]; // Edges for ReactFlow
     effects?: Effect[]; // List of visual effects
+    audioUrl?: string; // Optional audio URL for lip-sync
+    mouthOpenLayers?: string[]; // Layers to show when mouth is open
+    mouthClosedLayers?: string[]; // Layers to show when mouth is closed
+    mandatoryLayers?: string[]; // Layers that are always visible
 }
 
 export interface Effect {

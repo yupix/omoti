@@ -1,7 +1,8 @@
-import { useCurrentFrame, delayRender, continueRender } from 'remotion';
+import { useCurrentFrame, delayRender, continueRender, useVideoConfig } from 'remotion';
 import React, { useEffect, useState, useMemo } from 'react';
 import { readPsd, Psd, Layer } from 'ag-psd';
 import { Clip } from '../types';
+import { useAudioData, visualizeAudio } from "@remotion/media-utils";
 
 interface TachieRendererProps {
     clip: Clip;
@@ -13,6 +14,23 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
     const [psd, setPsd] = useState<Psd | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [handle] = useState(() => delayRender(`Loading Tachie: ${clip.title}`));
+
+    // Audio analysis for Lip Sync
+    const audioData = clip.audioUrl ? useAudioData(clip.audioUrl) : null;
+    const frame = useCurrentFrame();
+    const { fps } = useVideoConfig();
+
+    let isMouthOpen = false;
+    if (audioData) {
+        const amplitude = visualizeAudio({
+            audioData,
+            frame,
+            fps,
+            numberOfSamples: 1,
+        })[0];
+        // Threshold for mouth opening (0-1)
+        isMouthOpen = amplitude > 0.05;
+    }
 
     useEffect(() => {
         let isMounted = true;
@@ -26,28 +44,9 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
             }
 
             try {
-                console.log('Fetching PSD from:', clip.content);
                 const response = await fetch(clip.content);
-                if (!response.ok) {
-                    throw new Error(`Failed to fetch PSD: ${response.status} ${response.statusText}`);
-                }
+                if (!response.ok) throw new Error(`Failed to fetch PSD`);
                 const buffer = await response.arrayBuffer();
-
-                // Check for valid PSD signature (8BPS)
-                const view = new DataView(buffer);
-                // '8' = 56, 'B' = 66, 'P' = 80, 'S' = 83 in ASCII?
-                // Actually readPsd throws if invalid.
-                // But let's log if it looks like textual/html
-                if (buffer.byteLength < 4) throw new Error('File too small');
-
-                // Simple signature check: 8BPS
-                const sig = String.fromCharCode(view.getUint8(0), view.getUint8(1), view.getUint8(2), view.getUint8(3));
-                if (sig !== '8BPS') {
-                    // Try to read as text to see what we got
-                    const text = new TextDecoder().decode(buffer.slice(0, 100));
-                    throw new Error(`Invalid PSD signature: '${sig}' (Content starts with: ${text})`);
-                }
-
                 const parsedPsd = readPsd(buffer);
                 psdCache[clip.content] = parsedPsd;
                 if (isMounted) {
@@ -77,8 +76,10 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
         if (!ctx) return null;
 
         const drawLayers = (layers: Layer[], parentPath: string = '') => {
-            // ag-psd returns layers from bottom to top. 
-            // To render correctly, we draw them in that same order (bottom-most first).
+            // Draw from bottom-most layer to top-most layer (back-to-front)
+            // ag-psd returns layers in bottom-to-top order in some contexts, 
+            // but standard PSD structure is often reported top-to-bottom.
+            // Based on user feedback and structure analysis, 0 to length-1 is the correct back-to-front drawing order.
             for (let i = 0; i < layers.length; i++) {
                 const layer = layers[i];
                 const currentPath = parentPath ? `${parentPath}/${layer.name}` : (layer.name || 'Unnamed Layer');
@@ -88,14 +89,26 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
                 let shouldTraverse = true;
 
                 if (clip.tachieLayers && clip.tachieLayers.length > 0) {
-                    const inList = clip.tachieLayers.includes(currentPath);
-                    const childInList = !!(layer.children && clip.tachieLayers.some(p => p.startsWith(currentPath + '/')));
+                    const inBaseList = clip.tachieLayers.includes(currentPath);
+                    const isMandatory = clip.mandatoryLayers?.includes(currentPath);
+                    const isOpenMouth = clip.mouthOpenLayers?.includes(currentPath);
+                    const isClosedMouth = clip.mouthClosedLayers?.includes(currentPath);
+
+                    const childInBase = !!(layer.children && clip.tachieLayers.some(p => p.startsWith(currentPath + '/')));
+                    const childInMandatory = !!(layer.children && clip.mandatoryLayers?.some(p => p.startsWith(currentPath + '/')));
+                    const childInOpen = !!(layer.children && clip.mouthOpenLayers?.some(p => p.startsWith(currentPath + '/')));
+                    const childInClosed = !!(layer.children && clip.mouthClosedLayers?.some(p => p.startsWith(currentPath + '/')));
 
                     if (layer.children) {
-                        isVisible = inList || childInList;
+                        // Traverse if any of our states need this folder
+                        isVisible = inBaseList || childInBase || isMandatory || childInMandatory || isOpenMouth || childInOpen || isClosedMouth || childInClosed;
                         shouldTraverse = isVisible;
                     } else {
-                        isVisible = inList;
+                        // Leaf logic
+                        if (isOpenMouth) isVisible = !!isMouthOpen;
+                        else if (isClosedMouth) isVisible = !isMouthOpen;
+                        else isVisible = !!(inBaseList || isMandatory);
+
                         shouldTraverse = false;
                     }
                 }
@@ -115,15 +128,10 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
         }
 
         return canvas.toDataURL();
-    }, [psd, clip.tachieLayers]);
+    }, [psd, clip.tachieLayers, clip.mouthOpenLayers, clip.mouthClosedLayers, isMouthOpen]);
 
-    if (error) {
-        return <div style={{ color: 'red' }}>{error}</div>;
-    }
-
-    if (!renderedImage) {
-        return <div style={{ width: '100%', height: '100%', backgroundColor: '#333', display: 'flex', alignItems: 'center', justifyItems: 'center' }}>Loading PSD...</div>;
-    }
+    if (error) return <div style={{ color: 'red' }}>{error}</div>;
+    if (!renderedImage) return null;
 
     return (
         <img
