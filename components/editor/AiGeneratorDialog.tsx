@@ -18,49 +18,56 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
     const [prompt, setPrompt] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [provider, setProvider] = useState('openai');
-    const [selectedTachie, setSelectedTachie] = useState('');
-    const [psdLayers, setPsdLayers] = useState<string[]>([]);
+    const [selectedTachieUrls, setSelectedTachieUrls] = useState<string[]>([]);
+    const [tachieData, setTachieData] = useState<{ name: string, url: string, layers: string[] }[]>([]);
+    const [loadingLayers, setLoadingLayers] = useState(false);
     const [loading, setLoading] = useState(false);
     const [error, setError] = useState('');
     const [status, setStatus] = useState('');
 
     useEffect(() => {
-        if (availableTachies.length > 0 && !selectedTachie) {
-            setSelectedTachie(availableTachies[0].url);
+        if (availableTachies.length > 0 && selectedTachieUrls.length === 0) {
+            setSelectedTachieUrls([availableTachies[0].url]);
         }
     }, [availableTachies]);
 
     useEffect(() => {
-        if (selectedTachie) {
-            const extractLayers = async () => {
-                try {
-                    const res = await fetch(selectedTachie);
+        const extractAllLayers = async () => {
+            if (selectedTachieUrls.length === 0) {
+                setTachieData([]);
+                return;
+            }
+
+            setLoadingLayers(true);
+            try {
+                const newData = await Promise.all(selectedTachieUrls.map(async (url) => {
+                    const tachie = availableTachies.find(t => t.url === url);
+                    const name = tachie?.name || 'Unknown';
+
+                    const res = await fetch(url);
                     const buffer = await res.arrayBuffer();
                     const psd = readPsd(buffer, { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
 
-                    const names: string[] = [];
+                    const layerNames: string[] = [];
                     const traverse = (children: any[], path = '') => {
-                        // Reverse needed? ag-psd returns bottom-up? Check Editor.tsx logic.
-                        // Editor says: ag-psd returns layers from bottom to top.
-                        // For UI list (and likely AI context), top to bottom is more intuitive usually?
-                        // But Editor reverses it. Let's replicate.
                         [...children].reverse().forEach(child => {
                             const currentPath = path ? `${path}/${child.name}` : (child.name || 'Layer');
-                            names.push(currentPath);
+                            layerNames.push(currentPath);
                             if (child.children) traverse(child.children, currentPath);
                         });
                     };
                     if (psd.children) traverse(psd.children);
-                    setPsdLayers(names);
-                } catch (e) {
-                    console.error("Failed to extract PSD layers", e);
-                }
-            };
-            extractLayers();
-        } else {
-            setPsdLayers([]);
-        }
-    }, [selectedTachie]);
+                    return { name, url, layers: layerNames };
+                }));
+                setTachieData(newData);
+            } catch (e) {
+                console.error("Failed to extract PSD layers", e);
+            } finally {
+                setLoadingLayers(false);
+            }
+        };
+        extractAllLayers();
+    }, [selectedTachieUrls, availableTachies]);
 
     const handleGenerate = async () => {
         if (!prompt.trim()) return;
@@ -77,8 +84,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                     prompt,
                     apiKey,
                     provider,
-                    tachieUrl: selectedTachie,
-                    tachieLayers: psdLayers
+                    tachies: tachieData
                 })
             });
 
@@ -102,6 +108,14 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
         }
     };
 
+    const toggleTachie = (url: string) => {
+        setSelectedTachieUrls(prev =>
+            prev.includes(url)
+                ? prev.filter(u => u !== url)
+                : [...prev, url]
+        );
+    };
+
     return (
         <Dialog open={open} onOpenChange={onOpenChange}>
             <DialogContent className="sm:max-w-[500px]">
@@ -111,7 +125,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                         AI Video Generator
                     </DialogTitle>
                     <DialogDescription>
-                        Desribe the video you want to create (e.g., "Explain React useMemo").
+                        Describe the video you want to create (e.g., "Explain React useMemo").
                     </DialogDescription>
                 </DialogHeader>
 
@@ -151,19 +165,27 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                     </div>
 
                     <div className="grid gap-2">
-                        <label className="text-sm font-medium">Character (Tachie)</label>
-                        <select
-                            className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
-                            value={selectedTachie}
-                            onChange={(e) => setSelectedTachie(e.target.value)}
-                        >
+                        <label className="text-sm font-medium">Characters (Tachie)</label>
+                        <div className="grid grid-cols-2 gap-2 max-h-[120px] overflow-y-auto p-2 border rounded-md">
                             {availableTachies.map((t, idx) => (
-                                <option key={idx} value={t.url}>{t.name}</option>
+                                <label key={idx} className="flex items-center gap-2 p-1 hover:bg-secondary/50 rounded cursor-pointer">
+                                    <input
+                                        type="checkbox"
+                                        checked={selectedTachieUrls.includes(t.url)}
+                                        onChange={() => toggleTachie(t.url)}
+                                        className="rounded border-gray-300"
+                                    />
+                                    <span className="text-xs truncate">{t.name}</span>
+                                </label>
                             ))}
-                            {availableTachies.length === 0 && <option value="">No PSDs found</option>}
-                        </select>
-                        <p className="text-[10px] text-muted-foreground">
-                            {psdLayers.length > 0 ? `Detected ${psdLayers.length} layers for auto-expression.` : 'Select a PSD to enable dynamic expressions.'}
+                            {availableTachies.length === 0 && <span className="text-xs text-muted-foreground">No PSDs found</span>}
+                        </div>
+                        <p className="text-[10px] text-muted-foreground flex items-center gap-1">
+                            {loadingLayers ? (
+                                <><Loader2 size={10} className="animate-spin" /> Analyzing PSDs...</>
+                            ) : (
+                                `Selected ${selectedTachieUrls.length} characters for auto-expression.`
+                            )}
                         </p>
                     </div>
 

@@ -20,7 +20,7 @@ const AIVOICE_SERVER = 'http://localhost:8000';
 
 export async function POST(req: NextRequest) {
     try {
-        const { prompt, preset = "琴葉 茜", apiKey, provider = 'openai', tachieUrl, tachieLayers } = await req.json();
+        const { prompt, preset = "琴葉 茜", apiKey, provider = 'openai', tachies = [] } = await req.json();
 
         if (!prompt) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -28,58 +28,56 @@ export async function POST(req: NextRequest) {
 
         let scriptData;
 
-        let layerContext = "";
-        if (tachieLayers && tachieLayers.length > 0) {
-            layerContext = `
-            AVAILABLE PSD LAYERS:
-            ${JSON.stringify(tachieLayers)}
+        let characterContext = "";
+        if (tachies && tachies.length > 0) {
+            characterContext = `
+            AVAILABLE CHARACTERS:
+            ${tachies.map((t: any) => `
+            - Character Name: "${t.name}"
+              Layers: ${JSON.stringify(t.layers)}
+            `).join('\n')}
 
             INSTRUCTIONS FOR TACHIE (CHARACTER):
-            1. You MUST generate a "tachieConfig" object in the JSON root.
-            2. "tachieConfig" should map keys "neutral", "happy", "sad", "surprised", "serious" to an ARRAY of layer names strings from the provided list.
-            3. Identify base layers (Body, Hair, Clothes) that should be present in ALL emotions.
-            4. Identify expression layers (Eyes, Mouth, Eyebrow) for each emotion.
-            5. Combine Base + Expression layers for each key.
-            6. IGNORE layers starting with "!" or keys that look like setup data unless necessary for rendering. (Actually, include all visible layers required).
+            1. You MUST generate a "tachieConfigs" object in the JSON root.
+            2. "tachieConfigs" is a map: { [characterName: string]: { [emotion: string]: string[] } }.
+            3. For EACH character used in the script, define their layer sets for "neutral", "happy", "sad", "surprised", "serious".
+            4. Use total layer paths from the provided list for each character.
+            5. Identify base layers (Body, Hair, Clothes) and expression layers.
+            6. Each SCENE must specify which "character" is speaking.
             `;
         }
 
-        const systemInstruction = `You are a video script generator for a tech tutorial channel.
-            Generate a JSON structure for a short video explaining the user's topic.
+        const systemInstruction = `You are a video script generator for a tech tutorial or commentary channel.
+            Generate a JSON structure for a short video.
             The output must strictly follow this JSON schema:
             {
               "title": "Video Title",
-              "tachieConfig": {
-                "neutral": ["Layer/Path/1", "Layer/Path/2"],
-                "happy": ["Layer/Path/1", "Layer/Path/3"]
+              "tachieConfigs": {
+                "CharacterName": {
+                   "neutral": ["Layer/Path/1", "Layer/Path/2"],
+                   "happy": ["Layer/Path/1", "Layer/Path/3"]
+                }
               },
               "scenes": [
                 {
-                  "text": "Spoken dialogue line (keep it concise, under 20 words)",
+                  "text": "Spoken dialogue line",
+                  "character": "CharacterName",
+                  "emotion": "neutral" | "happy" | "sad" | "surprised" | "serious",
                   "action": "intro" | "explain" | "code" | "summary" | "outro",
                   "codeBlocks": [
                     { "code": "code snippet", "fileName": "App.tsx", "language": "tsx" }
                   ],
-                  "previewContent": "HTML content. If demonstrating interactivity (e.g. clicking), include <script> to AUTOMATICALLY simulate action using setTimeout/setInterval. Do NOT wait for user input.",
+                  "previewContent": "HTML content for demo",
                   "previewLayout": "split" | "overlay",
-                  "previewDelay": 0.5,
-                  "visualDescription": "Brief description of what to show",
-                  "emotion": "neutral" | "happy" | "sad" | "surprised" | "serious"
+                  "visualDescription": "Brief description",
+                  "position": "left" | "right" | "center"
                 }
               ]
             }
-            ${layerContext}
+            ${characterContext}
             Keep the total scenes between 5 and 10.
             Language: Japanese (unless requested otherwise).
-            Use a friendly, energetic tone.
-            TIP: If explaining interactions between multiple files (e.g. Parent & Child components), include BOTH in \`codeBlocks\` to display them simultaneously! Consumers love seeing related code side-by-side.
-            TIP: To show the code first and then the result covering it, use "previewLayout": "overlay" and "previewDelay": 0.5.
-            Emotions:
-            - neutral: Standard explanation (use for facts)
-            - happy: Encouraging, success (use for greetings, success)
-            - sad: Problem, error (use for mentioning bugs/difficulties)
-            - surprised: Interesting fact (use for 'did you know?')
-            - serious: Important point (use for warnings/key concepts)
+            Use a friendly tone.
             IMPORTANT: Return ONLY valid JSON.`;
 
         try {
@@ -132,12 +130,12 @@ export async function POST(req: NextRequest) {
             console.warn("Using mock fallback due to error.");
             // Mock Fallback
             scriptData = {
-                title: `React Tutorial: ${prompt}`,
+                title: `Tutorial: ${prompt}`,
                 scenes: [
-                    { text: "こんにちは！AI生成機能（モック）で解説するよ。", action: "intro" },
-                    { text: `GeminiやOpenAIを使って、${prompt}の動画を作れるんだ。`, action: "explain" },
-                    { text: "APIキーを設定すれば、もっと詳しく解説できるよ！", action: "summary" },
-                    { text: "ぜひ試してみてね。", action: "outro" }
+                    { text: "こんにちは！複数立ち絵のテストだよ。", character: tachies[0]?.name || "Guest", emotion: "happy", action: "intro" },
+                    { text: "複数のキャラクターを切り替えて喋らせることができるんだ。", character: tachies[0]?.name || "Guest", emotion: "neutral", action: "explain" },
+                    { text: "すごいね！", character: tachies[1]?.name || tachies[0]?.name || "Guest", emotion: "surprised", action: "explain" },
+                    { text: "これからもっと便利になるよ。", character: tachies[0]?.name || "Guest", emotion: "happy", action: "summary" }
                 ]
             };
         }
@@ -224,7 +222,11 @@ export async function POST(req: NextRequest) {
                 animation: { type: 'fade', duration: 5 }
             });
 
-            // Character Clip (Akane or Custom)
+            // Character Clip Selection
+            const sceneCharacterName = scene.character;
+            const targetCharacter = tachies.find((t: any) => t.name === sceneCharacterName) || tachies[0];
+            const activeTachieUrl = targetCharacter?.url || PSD_PATH;
+
             let tachieLayers: string[] = [];
             const emotion = scene.emotion || 'neutral';
 
@@ -238,39 +240,37 @@ export async function POST(req: NextRequest) {
             const previewDelay = Math.max(0, Math.min(1, scene.previewDelay || 0)); // Clamp 0-1
 
             let tachieLayout = { x: 50, y: 150, width: 600, height: 600 };
-            if (hasCode && hasPreview && !isOverlay) {
+
+            // Apply position override if provided by LLM
+            if (scene.position === 'right') {
+                tachieLayout = { x: 680, y: 150, width: 600, height: 600 };
+            } else if (scene.position === 'center') {
+                tachieLayout = { x: 340, y: 150, width: 600, height: 600 };
+            } else if (hasCode && hasPreview && !isOverlay) {
                 // Tri-layout: Tachie (Left Edge) | Code (Center) | Preview (Right)
                 tachieLayout = { x: -100, y: 220, width: 540, height: 540 };
             } else if (hasCode) {
                 // Split-layout: Tachie (Left) | Code (Right)
-                // If overlay, Code is centered, Tachie shifts left similarly to split mode
                 tachieLayout = { x: 0, y: 150, width: 600, height: 600 };
             }
 
-            if (scriptData.tachieConfig && (scriptData.tachieConfig[emotion] || scriptData.tachieConfig['neutral'])) {
-                tachieLayers = scriptData.tachieConfig[emotion] || scriptData.tachieConfig['neutral'];
+            // Layer Resolution
+            if (scriptData.tachieConfigs && scriptData.tachieConfigs[sceneCharacterName]) {
+                const config = scriptData.tachieConfigs[sceneCharacterName];
+                tachieLayers = config[emotion] || config['neutral'] || [];
+            } else if (scriptData.tachieConfig && !sceneCharacterName) {
+                // Backward compatibility / Single character mode
+                tachieLayers = scriptData.tachieConfig[emotion] || scriptData.tachieConfig['neutral'] || [];
             } else {
                 // Fallback: Hardcoded Akane Logic
                 const AKANE_BASE_LAYERS = [
-                    '琴葉姉妹',
-                    '琴葉姉妹/!後ろ髪',
-                    '琴葉姉妹/!後ろ髪/*あかねちゃん',
-                    '琴葉姉妹/!後ろ髪/!もみあげ',
-                    '琴葉姉妹/胴体',
-                    '琴葉姉妹/胴体/*あかねちゃん',
-                    '琴葉姉妹/胴体/*あかねちゃん/腕/!右腕/*下',
-                    '琴葉姉妹/胴体/*あかねちゃん/腕/!左腕/*下',
-                    '琴葉姉妹/胴体/*あかねちゃん/!胴体/!足/*立っている',
-                    '琴葉姉妹/胴体/*あかねちゃん/!胴体/*下にしている',
-                    '琴葉姉妹/胴体/*あかねちゃん/!装飾',
-                    '琴葉姉妹/!素体',
-                    '琴葉姉妹/ほっぺた/*上',
-                    '琴葉姉妹/手前に出てる腕',
-                    '琴葉姉妹/!前髪',
-                    '琴葉姉妹/!前髪/*あかねちゃん',
-                    '琴葉姉妹/!前髪/*あかねちゃん/!髪飾り右/*あかねちゃん',
-                    '琴葉姉妹/!前髪/*あかねちゃん/*標準',
-                    '琴葉姉妹/!表情'
+                    '琴葉姉妹', '琴葉姉妹/!後ろ髪', '琴葉姉妹/!後ろ髪/*あかねちゃん', '琴葉姉妹/!後ろ髪/!もみあげ',
+                    '琴葉姉妹/胴体', '琴葉姉妹/胴体/*あかねちゃん', '琴葉姉妹/胴体/*あかねちゃん/腕/!右腕/*下',
+                    '琴葉姉妹/胴体/*あかねちゃん/腕/!左腕/*下', '琴葉姉妹/胴体/*あかねちゃん/!胴体/!足/*立っている',
+                    '琴葉姉妹/胴体/*あかねちゃん/!胴体/*下にしている', '琴葉姉妹/胴体/*あかねちゃん/!装飾',
+                    '琴葉姉妹/!素体', '琴葉姉妹/ほっぺた/*上', '琴葉姉妹/手前に出てる腕', '琴葉姉妹/!前髪',
+                    '琴葉姉妹/!前髪/*あかねちゃん', '琴葉姉妹/!前髪/*あかねちゃん/!髪飾り右/*あかねちゃん',
+                    '琴葉姉妹/!前髪/*あかねちゃん/*標準', '琴葉姉妹/!表情'
                 ];
 
                 const TACHIE_EMOTIONS: Record<string, string[]> = {
@@ -285,21 +285,20 @@ export async function POST(req: NextRequest) {
                 tachieLayers = [...AKANE_BASE_LAYERS, ...emotionLayers];
             }
 
-            // Only add slide animation for the first appearance or significant change
             clips.push({
                 id: `char-${i}`,
                 type: 'tachie',
                 trackId: 2,
                 startFrame: currentFrame,
-                durationInFrames: totalSceneFrames, // Stay for padding
-                content: tachieUrl || PSD_PATH,
-                title: `Character (${emotion})`,
+                durationInFrames: totalSceneFrames,
+                content: activeTachieUrl,
+                title: `${sceneCharacterName || 'Character'} (${emotion})`,
                 x: tachieLayout.x,
                 y: tachieLayout.y,
                 width: tachieLayout.width,
                 height: tachieLayout.height,
                 tachieLayers: tachieLayers,
-                animation: i === 0 ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
+                animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
             });
 
             if (hasCode) {
