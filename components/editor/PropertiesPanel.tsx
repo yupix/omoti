@@ -8,7 +8,7 @@ import { Clip, ClipType } from '@/types';
 import { bundledLanguages } from 'shiki';
 import {
     Layers, Plus, Trash2, Clock, Volume2, Bookmark, CheckSquare, ChevronDown, ChevronRight,
-    FileText, Video as VideoIcon, Image as ImageIcon, Square, Circle, Code2, Grid, Smile, Loader2
+    FileText, Video as VideoIcon, Image as ImageIcon, Square, Circle, Code2, Grid, Smile, Loader2, Sparkles, Wand2
 } from 'lucide-react';
 import { FlowEditor } from './FlowEditor';
 import { GOOGLE_FONTS, SYSTEM_FONTS } from '@/lib/fonts';
@@ -584,6 +584,127 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
                                     className="h-8 text-sm"
                                 />
                             </div>
+                        </CardContent>
+                    </Card>
+
+                    {/* Effects Card */}
+                    <Card className="bg-secondary/20 border-border/40">
+                        <CardHeader className="p-3 pb-0 flex flex-row items-center justify-between space-y-0">
+                            <CardTitle className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                                <Wand2 size={12} /> {t('editor.properties.effects') || 'Effects'}
+                            </CardTitle>
+                            <Button
+                                size="sm" variant="ghost" className="h-6 w-6 p-0 hover:bg-primary/20 text-primary"
+                                onClick={() => {
+                                    const effects = selectedClip.effects || [];
+                                    handleUpdateClip('effects', [...effects, { type: 'glow', color: primaryColor, width: 10, blur: 10 }]);
+                                }}
+                            >
+                                <Plus size={14} />
+                            </Button>
+                        </CardHeader>
+                        <CardContent className="p-3 space-y-3">
+                            {!selectedClip.effects?.length && (
+                                <p className="text-[10px] text-muted-foreground text-center py-2 italic">No effects added</p>
+                            )}
+                            {(selectedClip.effects || []).map((effect, idx) => (
+                                <div key={idx} className="space-y-2 p-2 rounded-md border border-border/50 bg-background/30 relative group">
+                                    <div className="flex items-center justify-between">
+                                        <Select
+                                            value={effect.type}
+                                            onValueChange={(val: any) => {
+                                                const next = [...(selectedClip.effects || [])];
+                                                next[idx] = { ...effect, type: val };
+                                                handleUpdateClip('effects', next);
+                                            }}
+                                        >
+                                            <SelectTrigger className="h-6 text-[10px] w-24">
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent>
+                                                <SelectItem value="glow">Glow</SelectItem>
+                                                <SelectItem value="outline">Outline</SelectItem>
+                                                <SelectItem value="shadow">Shadow</SelectItem>
+                                                <SelectItem value="blur">Blur</SelectItem>
+                                                <SelectItem value="sepia">Sepia</SelectItem>
+                                                <SelectItem value="grayscale">Grayscale</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                        <Button
+                                            size="icon" variant="ghost" className="h-5 w-5 text-destructive"
+                                            onClick={() => {
+                                                const next = (selectedClip.effects || []).filter((_, i) => i !== idx);
+                                                handleUpdateClip('effects', next);
+                                            }}
+                                        >
+                                            <Trash2 size={10} />
+                                        </Button>
+                                    </div>
+
+                                    {(effect.type === 'glow' || effect.type === 'outline' || effect.type === 'shadow') && (
+                                        <div className="flex gap-2">
+                                            <div className="flex-1 space-y-1">
+                                                <Label className="text-[9px] text-muted-foreground">Color</Label>
+                                                <Input
+                                                    type="color"
+                                                    value={effect.color || '#ffffff'}
+                                                    onChange={e => {
+                                                        const next = [...(selectedClip.effects || [])];
+                                                        next[idx] = { ...effect, color: e.target.value };
+                                                        handleUpdateClip('effects', next);
+                                                    }}
+                                                    className="h-6 p-0.5"
+                                                />
+                                            </div>
+                                            <div className="flex-1 space-y-1">
+                                                <Label className="text-[9px] text-muted-foreground">Size</Label>
+                                                <Input
+                                                    type="number"
+                                                    value={effect.width ?? 5}
+                                                    onChange={e => {
+                                                        const next = [...(selectedClip.effects || [])];
+                                                        next[idx] = { ...effect, width: parseInt(e.target.value) };
+                                                        handleUpdateClip('effects', next);
+                                                    }}
+                                                    className="h-6 text-xs"
+                                                />
+                                            </div>
+                                        </div>
+                                    )}
+                                    {(effect.type === 'glow' || effect.type === 'shadow' || effect.type === 'blur') && (
+                                        <div className="space-y-1">
+                                            <Label className="text-[9px] text-muted-foreground">Blur ({effect.blur ?? 5}px)</Label>
+                                            <input
+                                                type="range"
+                                                min="0" max="50" step="1"
+                                                value={effect.blur ?? 5}
+                                                onChange={e => {
+                                                    const next = [...(selectedClip.effects || [])];
+                                                    next[idx] = { ...effect, blur: parseInt(e.target.value) };
+                                                    handleUpdateClip('effects', next);
+                                                }}
+                                                className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                                            />
+                                        </div>
+                                    )}
+                                    {(effect.type === 'sepia' || effect.type === 'grayscale') && (
+                                        <div className="space-y-1">
+                                            <Label className="text-[9px] text-muted-foreground">Intensity ({(effect.opacity ?? 1) * 100}%)</Label>
+                                            <input
+                                                type="range"
+                                                min="0" max="1" step="0.1"
+                                                value={effect.opacity ?? 1}
+                                                onChange={e => {
+                                                    const next = [...(selectedClip.effects || [])];
+                                                    next[idx] = { ...effect, opacity: parseFloat(e.target.value) };
+                                                    handleUpdateClip('effects', next);
+                                                }}
+                                                className="w-full h-1 bg-secondary rounded-lg appearance-none cursor-pointer accent-primary"
+                                            />
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
                         </CardContent>
                     </Card>
 

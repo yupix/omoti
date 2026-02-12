@@ -28,6 +28,15 @@ export interface Clip {
     tachieLayers?: string[]; // IDs or paths of visible layers for PSD
     nodes?: any[]; // Nodes for ReactFlow
     edges?: any[]; // Edges for ReactFlow
+    effects?: Effect[]; // List of visual effects
+}
+
+export interface Effect {
+    type: 'glow' | 'outline' | 'shadow' | 'blur' | 'sepia' | 'grayscale';
+    color?: string;
+    width?: number; // Spread or thickness
+    blur?: number;
+    opacity?: number;
 }
 
 export interface CodeStep {

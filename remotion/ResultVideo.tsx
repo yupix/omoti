@@ -106,6 +106,48 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
 
     const animationStyle: React.CSSProperties = { opacity, transform: transformString };
 
+    // Calculate Effects Styles
+    let filterString = '';
+    let textShadowString = '';
+    let extraStyles: React.CSSProperties = {};
+
+    if (clip.effects && clip.effects.length > 0) {
+        clip.effects.forEach(effect => {
+            const color = effect.color || '#ffffff';
+            const width = effect.width ?? 5;
+            const blur = effect.blur ?? 5;
+            const opacity = effect.opacity ?? 1;
+
+            if (effect.type === 'glow') {
+                filterString += ` drop-shadow(0 0 ${blur}px ${color})`;
+            } else if (effect.type === 'outline') {
+                if (clip.type === 'text') {
+                    // Multi-shadow hack for better text outline
+                    const w = width;
+                    textShadowString += `${w}px ${w}px 0 ${color}, -${w}px ${w}px 0 ${color}, ${w}px -${w}px 0 ${color}, -${w}px -${w}px 0 ${color}, `;
+                } else {
+                    filterString += ` drop-shadow(${width}px 0 0 ${color}) drop-shadow(-${width}px 0 0 ${color}) drop-shadow(0 ${width}px 0 ${color}) drop-shadow(0 -${width}px 0 ${color})`;
+                }
+            } else if (effect.type === 'shadow') {
+                filterString += ` drop-shadow(${width}px ${width}px ${blur}px ${color})`;
+            } else if (effect.type === 'blur') {
+                filterString += ` blur(${blur}px)`;
+            } else if (effect.type === 'sepia') {
+                filterString += ` sepia(${opacity * 100}%)`;
+            } else if (effect.type === 'grayscale') {
+                filterString += ` grayscale(${opacity * 100}%)`;
+            }
+        });
+    }
+
+    const effectsStyle: React.CSSProperties = {
+        filter: filterString.trim() || undefined,
+        textShadow: textShadowString.replace(/, $/, '') || undefined,
+        ...extraStyles
+    };
+
+    const finalStyle = { ...animationStyle, ...effectsStyle };
+
     // Base positioning style
     const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
     const positionStyle: React.CSSProperties = {
@@ -117,7 +159,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
-        ...animationStyle,
+        ...finalStyle,
     };
 
     // Render text

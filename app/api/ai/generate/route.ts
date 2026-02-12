@@ -72,7 +72,10 @@ export async function POST(req: NextRequest) {
                   "previewContent": "HTML content for demo",
                   "previewLayout": "split" | "overlay",
                   "visualDescription": "Brief description",
-                  "position": "left" | "right" | "center"
+                  "position": "left" | "right" | "center",
+                  "effects": [
+                    { "type": "glow" | "outline" | "shadow" | "blur", "color": "#ff0000", "width": 5, "blur": 10 }
+                  ]
                 }
               ]
             }
@@ -81,6 +84,13 @@ export async function POST(req: NextRequest) {
             Language: Japanese (unless requested otherwise).
             Tone: Informative, engaging, and detailed.
             Provide deep explanations rather than just surface-level summaries.
+            
+            EFFECTS GUIDE:
+            - Use "glow" to emphasize a character or code block.
+            - Use "outline" with high contrast for text or dark characters.
+            - Use "shadow" for depth.
+            - Feel free to apply multiple effects to make the video look premium.
+
             IMPORTANT: Return ONLY valid JSON.`;
 
         try {
@@ -135,9 +145,21 @@ export async function POST(req: NextRequest) {
             scriptData = {
                 title: `Tutorial: ${prompt}`,
                 scenes: [
-                    { text: "こんにちは！複数立ち絵のテストだよ。", character: tachies[0]?.name || "Guest", emotion: "happy", action: "intro" },
-                    { text: "複数のキャラクターを切り替えて喋らせることができるんだ。", character: tachies[0]?.name || "Guest", emotion: "neutral", action: "explain" },
-                    { text: "すごいね！", character: tachies[1]?.name || tachies[0]?.name || "Guest", emotion: "surprised", action: "explain" },
+                    {
+                        text: "こんにちは！エフェクト機能のテストだよ。",
+                        character: tachies[0]?.name || "Guest",
+                        emotion: "happy",
+                        action: "intro",
+                        effects: [{ type: "glow", color: "#ffff00", blur: 20 }]
+                    },
+                    { text: "キャラクターを光らせたりできるんだ。", character: tachies[0]?.name || "Guest", emotion: "neutral", action: "explain" },
+                    {
+                        text: "すごいね！",
+                        character: tachies[1]?.name || tachies[0]?.name || "Guest",
+                        emotion: "surprised",
+                        action: "explain",
+                        effects: [{ type: "outline", color: "#ff00ff", width: 3 }]
+                    },
                     { text: "これからもっと便利になるよ。", character: tachies[0]?.name || "Guest", emotion: "happy", action: "summary" }
                 ]
             };
@@ -222,6 +244,7 @@ export async function POST(req: NextRequest) {
                     backgroundColor: 'rgba(0,0,0,0.7)', borderRadius: '12px', padding: '16px',
                     textAlign: 'center', backdropFilter: 'blur(4px)'
                 },
+                effects: scene.effects || [],
                 animation: { type: 'fade', duration: 5 }
             });
 
@@ -301,6 +324,7 @@ export async function POST(req: NextRequest) {
                 width: tachieLayout.width,
                 height: tachieLayout.height,
                 tachieLayers: tachieLayers,
+                effects: scene.effects || [],
                 animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
             });
 
@@ -345,6 +369,7 @@ export async function POST(req: NextRequest) {
                         height: blockHeight - 20, // Margin
                         language: block.language || 'tsx',
                         steps: codeSteps,
+                        effects: scene.effects || [],
                         transitionDuration: 5, // Snappier line transition
                         animation: { type: 'pop', duration: 10 }
                     });
