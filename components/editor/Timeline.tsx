@@ -1,4 +1,5 @@
 import React, { useRef, useState, useEffect } from 'react';
+import { useEditorFrame } from './useEditorFrame';
 import { Clip, Track } from '@/types';
 import { cn } from '@/lib/utils';
 import { Button } from '@/components/ui/button';
@@ -8,7 +9,6 @@ import { useTranslation } from 'react-i18next';
 interface TimelineProps {
     tracks: Track[];
     clips: Clip[];
-    currentFrame: number;
     onSeek: (frame: number) => void;
     onClipClick: (clipId: string) => void;
     onClipMove: (clipId: string, newStartFrame: number, newTrackId: number) => void;
@@ -37,7 +37,6 @@ enum DragType {
 export const Timeline: React.FC<TimelineProps> = ({
     tracks,
     clips,
-    currentFrame,
     onSeek,
     onClipClick,
     onClipMove,
@@ -51,6 +50,7 @@ export const Timeline: React.FC<TimelineProps> = ({
     totalFrames,
 }) => {
     const { t } = useTranslation();
+    const currentFrame = useEditorFrame();
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const [dragState, setDragState] = useState<{ id: string; type: DragType; offset: number; initialStart: number; initialDuration: number } | null>(null);

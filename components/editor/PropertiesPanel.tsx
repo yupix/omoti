@@ -1,4 +1,5 @@
 import React from 'react';
+import { useEditorFrame } from './useEditorFrame';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -17,7 +18,6 @@ import { TFunction } from 'i18next';
 
 interface PropertiesPanelProps {
     selectedClip: Clip | null;
-    currentFrame: number;
     localVolume: number | null;
     setLocalVolume: (vol: number | null) => void;
     handleUpdateClip: (key: keyof Clip, value: any) => void;
@@ -42,9 +42,8 @@ interface PropertiesPanelProps {
     t: TFunction;
 }
 
-export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
+const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
     selectedClip,
-    currentFrame,
     localVolume,
     setLocalVolume,
     handleUpdateClip,
@@ -68,6 +67,7 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
     setPrimaryColor,
     t
 }) => {
+    const currentFrame = useEditorFrame();
     return (
         <>
             {selectedClip ? (
@@ -869,3 +869,5 @@ export const PropertiesPanel: React.FC<PropertiesPanelProps> = ({
         </>
     );
 };
+
+export const PropertiesPanel = React.memo(PropertiesPanelInner);

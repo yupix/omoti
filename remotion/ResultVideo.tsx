@@ -1,4 +1,5 @@
-import { AbsoluteFill, Sequence, useCurrentFrame, Audio, Video, interpolate, spring, useVideoConfig } from 'remotion';
+import { AbsoluteFill, Sequence, useCurrentFrame, Audio, Video, interpolate, spring, useVideoConfig, Img } from 'remotion';
+import { resolveAssetUrl } from './utils';
 import { Gif } from '@remotion/gif';
 import React from 'react';
 import { Clip } from '../types';
@@ -18,19 +19,20 @@ import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadBebasNeue } from "@remotion/google-fonts/BebasNeue";
 import { loadFont as loadPermanentMarker } from "@remotion/google-fonts/PermanentMarker";
 
-// Preload common fonts with optimizations
+// Preload fonts - Japanese fonts use default (no japanese subset in @remotion/google-fonts)
 loadNotoSansJP();
 loadNotoSerifJP();
 loadZenKakuGothicNew();
 loadMPLUS1p();
 loadKaiseiTokumin();
-loadInter();
-loadRoboto();
-loadMontserrat();
-loadPlayfairDisplay();
-loadOswald();
-loadBebasNeue();
-loadPermanentMarker();
+// Latin fonts: specify weights/subsets to reduce bundle size
+loadInter('normal', { weights: ['400', '600', '700'], subsets: ['latin'] });
+loadRoboto('normal', { weights: ['400', '700'], subsets: ['latin'] });
+loadMontserrat('normal', { weights: ['400', '700'], subsets: ['latin'] });
+loadPlayfairDisplay('normal', { weights: ['400', '700'], subsets: ['latin'] });
+loadOswald('normal', { weights: ['400', '700'], subsets: ['latin'] });
+loadBebasNeue('normal', { weights: ['400'], subsets: ['latin'] });
+loadPermanentMarker('normal', { weights: ['400'], subsets: ['latin'] });
 
 const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
     const frame = useCurrentFrame();
@@ -71,9 +73,10 @@ const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
 
 interface RenderClipProps {
     clip: Clip;
+    assetBaseUrl?: string;
 }
 
-const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
+const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
 
@@ -238,10 +241,11 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'video') {
+        const videoSrc = resolveAssetUrl(clip.content, assetBaseUrl);
         return (
             <div style={positionStyle}>
                 <Video
-                    src={clip.content}
+                    src={videoSrc}
                     startFrom={Math.round(clip.mediaStartOffset || 0)}
                     playbackRate={clip.playbackRate || 1}
                     volume={clip.volume ?? 1}
@@ -257,39 +261,39 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'image') {
-        // Handle GIF with restart logic using @remotion/gif
+        // Handle GIF - Gif syncs with timeline; use Sequence for mediaStartOffset
         if (clip.content.toLowerCase().endsWith('.gif')) {
-            const speed = clip.playbackRate || 1;
-            const startOffset = clip.mediaStartOffset || 0;
-            // Calculate effective frame based on offset and speed
-            const displayFrame = startOffset + (frame * speed);
+            const playbackRate = clip.playbackRate || 1;
+            const startOffset = Math.round(clip.mediaStartOffset || 0);
+            const gifSrc = resolveAssetUrl(clip.content, assetBaseUrl);
 
             return (
                 <div style={positionStyle}>
-                    <Gif
-                        src={clip.content}
-                        frame={displayFrame}
-                        style={{
-                            width: '100%',
-                            height: '100%',
-                            objectFit: 'cover',
-                            ...clip.style
-                        }}
-                    />
+                    <Sequence from={-startOffset} durationInFrames={Infinity} layout="none">
+                        <Gif
+                            src={gifSrc}
+                            playbackRate={playbackRate}
+                            fit="cover"
+                            style={{
+                                width: '100%',
+                                height: '100%',
+                                ...clip.style
+                            }}
+                        />
+                    </Sequence>
                 </div>
             );
         }
 
+        const imgSrc = resolveAssetUrl(clip.content, assetBaseUrl);
         return (
             <div style={positionStyle}>
-                {/* eslint-disable-next-line @next/next/no-img-element */}
-                <img
-                    src={clip.content}
-                    alt="clip"
+                <Img
+                    src={imgSrc}
                     style={{
                         width: '100%',
                         height: '100%',
-                        objectFit: 'cover', // Or contain? Cover fills the box.
+                        objectFit: 'cover',
                         ...clip.style
                     }}
                 />
@@ -316,7 +320,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     if (clip.type === 'tachie') {
         return (
             <div style={positionStyle}>
-                <TachieRenderer clip={clip} />
+                <TachieRenderer clip={clip} assetBaseUrl={assetBaseUrl} />
             </div>
         );
     }
@@ -380,7 +384,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
                     <div style={{ flex: 1, position: 'relative', backgroundColor: 'white' }}>
                         <iframe
                             srcDoc={clip.content.startsWith('<') ? clip.content : undefined}
-                            src={!clip.content.startsWith('<') ? clip.content : undefined}
+                            src={!clip.content.startsWith('<') ? resolveAssetUrl(clip.content, assetBaseUrl) : undefined}
                             style={{ width: '100%', height: '100%', border: 'none' }}
                             title="Browser Preview"
                             sandbox="allow-scripts"
@@ -392,7 +396,8 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
     }
 
     if (clip.type === 'audio') {
-        return <Audio src={clip.content} startFrom={Math.round(clip.mediaStartOffset || 0)} playbackRate={clip.playbackRate || 1} volume={clip.volume ?? 1} />;
+        const audioSrc = resolveAssetUrl(clip.content, assetBaseUrl);
+        return <Audio src={audioSrc} startFrom={Math.round(clip.mediaStartOffset || 0)} playbackRate={clip.playbackRate || 1} volume={clip.volume ?? 1} />;
     }
 
     return null;
@@ -401,8 +406,9 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip }) => {
 export const ResultVideo: React.FC<{
     clips: Clip[];
     primaryColor: string;
-}> = ({ clips, primaryColor }) => {
-    const frame = useCurrentFrame();
+    assetBaseUrl?: string;
+}> = ({ clips, primaryColor, assetBaseUrl }) => {
+    const { fps } = useVideoConfig();
 
     // Sort clips by trackId descending
     // Visually top tracks (Lower IDs) should be rendered last (Highest Z-index)
@@ -413,14 +419,7 @@ export const ResultVideo: React.FC<{
     }, [clips]);
 
     return (
-        <div style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: '100%',
-            height: '100%',
-            backgroundColor: '#000'
-        }}>
+        <AbsoluteFill style={{ backgroundColor: '#000' }}>
             {/* Background - Inline Styles */}
             <div
                 style={{
@@ -436,11 +435,12 @@ export const ResultVideo: React.FC<{
                     key={clip.id}
                     from={clip.startFrame}
                     durationInFrames={clip.durationInFrames}
+                    premountFor={Math.min(clip.durationInFrames, fps)} // Load before play per best practices
                     style={{ zIndex: 10 + index }}
                 >
-                    <RenderClip clip={clip} />
+                    <RenderClip clip={clip} assetBaseUrl={assetBaseUrl} />
                 </Sequence>
             ))}
-        </div>
+        </AbsoluteFill>
     );
 };

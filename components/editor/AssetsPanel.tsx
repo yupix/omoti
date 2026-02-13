@@ -13,7 +13,7 @@ interface AssetsPanelProps {
     t: TFunction;
 }
 
-export const AssetsPanel: React.FC<AssetsPanelProps> = ({
+const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     handleFileUpload,
     isUploading,
     assets,
@@ -100,3 +100,5 @@ export const AssetsPanel: React.FC<AssetsPanelProps> = ({
         </div>
     );
 };
+
+export const AssetsPanel = React.memo(AssetsPanelInner);

@@ -48,6 +48,10 @@
             "export": "書き出し",
             "exporting": "書き出し中..."
         },
+        "preview": {
+            "fullscreen": "フルスクリーン",
+            "exitFullscreen": "フルスクリーンを終了"
+        },
         "elements": {
             "text": "テキスト",
             "video": "動画",

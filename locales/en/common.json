@@ -48,6 +48,10 @@
             "export": "Export",
             "exporting": "Exporting..."
         },
+        "preview": {
+            "fullscreen": "Fullscreen",
+            "exitFullscreen": "Exit Fullscreen"
+        },
         "elements": {
             "text": "Text",
             "video": "Video",

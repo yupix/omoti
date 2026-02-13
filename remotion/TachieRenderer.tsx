@@ -3,20 +3,23 @@ import React, { useEffect, useState, useMemo } from 'react';
 import { readPsd, Psd, Layer } from 'ag-psd';
 import { Clip } from '../types';
 import { useAudioData, visualizeAudio } from "@remotion/media-utils";
+import { resolveAssetUrl } from './utils';
 
 interface TachieRendererProps {
     clip: Clip;
+    assetBaseUrl?: string;
 }
 
 const psdCache: Record<string, Psd> = {};
 
-export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
+export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip, assetBaseUrl }) => {
     const [psd, setPsd] = useState<Psd | null>(null);
     const [error, setError] = useState<string | null>(null);
     const [handle] = useState(() => delayRender(`Loading Tachie: ${clip.title}`));
 
     // Audio analysis for Lip Sync
-    const audioData = clip.audioUrl ? useAudioData(clip.audioUrl) : null;
+    const resolvedAudioUrl = clip.audioUrl ? resolveAssetUrl(clip.audioUrl, assetBaseUrl) : null;
+    const audioData = resolvedAudioUrl ? useAudioData(resolvedAudioUrl) : null;
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
 
@@ -44,7 +47,8 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
             }
 
             try {
-                const response = await fetch(clip.content);
+                const resolvedUrl = resolveAssetUrl(clip.content, assetBaseUrl);
+                const response = await fetch(resolvedUrl);
                 if (!response.ok) throw new Error(`Failed to fetch PSD`);
                 const buffer = await response.arrayBuffer();
                 const parsedPsd = readPsd(buffer);
@@ -64,7 +68,7 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip }) => {
 
         loadPsd();
         return () => { isMounted = false; };
-    }, [clip.content, handle]);
+    }, [clip.content, handle, assetBaseUrl]);
 
     const renderedImage = useMemo(() => {
         if (!psd) return null;

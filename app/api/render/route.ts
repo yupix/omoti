@@ -8,11 +8,14 @@ import fs from 'fs';
 export async function POST(req: NextRequest) {
     try {
         const body = await req.json();
-        const { clips } = body;
+        const { clips, assetBaseUrl } = body;
 
         if (!clips) {
             return NextResponse.json({ error: 'No clips provided' }, { status: 400 });
         }
+
+        // エクスポート時にPSD等のアセットを取得するためのベースURL（Next.jsサーバー）
+        const baseUrl = assetBaseUrl || (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000');
 
         console.log('Starting render process...');
 
@@ -40,7 +43,8 @@ export async function POST(req: NextRequest) {
             id: compositionId,
             inputProps: {
                 clips,
-                primaryColor: '#6d28d9' // You could pass this from body too
+                primaryColor: '#6d28d9',
+                assetBaseUrl: baseUrl,
             },
         });
 
@@ -55,7 +59,8 @@ export async function POST(req: NextRequest) {
             outputLocation,
             inputProps: {
                 clips,
-                primaryColor: '#6d28d9'
+                primaryColor: '#6d28d9',
+                assetBaseUrl: baseUrl,
             },
             // You can tweak these for speed vs quality
             crf: 20,

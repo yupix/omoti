@@ -14,6 +14,7 @@ export const MyComposition = () => {
             defaultProps={{
                 clips: [] as Clip[],
                 primaryColor: '#6d28d9',
+                assetBaseUrl: typeof window !== 'undefined' ? window.location.origin : 'http://localhost:3000',
             }}
             calculateMetadata={async ({ props }) => {
                 const maxDuration = props.clips.reduce((max, clip) => Math.max(max, clip.startFrame + clip.durationInFrames), 300);

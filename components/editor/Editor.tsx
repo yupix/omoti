@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useRef, useEffect, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useMemo, useCallback } from 'react';
 import { Player, PlayerRef } from '@remotion/player';
 import { ResultVideo } from '@/remotion/ResultVideo';
 import { Button } from '@/components/ui/button';
@@ -12,7 +12,8 @@ import '@/lib/i18n'; // Initialize i18n
 import { useTranslation } from 'react-i18next';
 import {
     Download, Box, Play, Pause, SkipBack, SkipForward,
-    Loader2, Save, FolderOpen, Globe, Scissors, Copy, Trash2
+    Loader2, Save, FolderOpen, Globe, Scissors, Copy, Trash2,
+    Maximize2, X
 } from 'lucide-react';
 import { readPsd } from 'ag-psd';
 import { getAIVoicePresets } from '@/lib/aivoice';
@@ -23,6 +24,8 @@ import { Sparkles } from 'lucide-react';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
 import { Asset, getMediaDuration } from './utils';
+import { setFrame as setEditorFrame, getSnapshot as getEditorFrame } from './editorFrameStore';
+import { FrameDisplay, FullscreenFrameDisplay, FrameSeekBar, PreviewClipOverlays } from './EditorFrameComponents';
 
 export default function Editor() {
     const { t, i18n } = useTranslation();
@@ -31,7 +34,7 @@ export default function Editor() {
     const [clips, setClips] = useState<Clip[]>(INITIAL_CLIPS);
     const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
 
-    const [currentFrame, setCurrentFrame] = useState(0);
+    const currentFrameRef = useRef(0); // for addClip etc - synced from store
     const [isPlaying, setIsPlaying] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [player, setPlayer] = useState<PlayerRef | null>(null);
@@ -47,6 +50,15 @@ export default function Editor() {
     const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
     const [selectedAiVoicePreset, setSelectedAiVoicePreset] = useState<string>('');
     const [isSynthesizing, setIsSynthesizing] = useState(false);
+    const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+    const mainPlayerRef = React.useRef<PlayerRef | null>(null);
+    const wasFullscreenRef = React.useRef(false);
+    const [language, setLanguage] = useState(() => i18n.resolvedLanguage || 'en');
+
+    const handleLanguageChange = (val: string) => {
+        setLanguage(val);
+        i18n.changeLanguage(val);
+    };
 
     // Load tachie presets from localStorage
     useEffect(() => {
@@ -80,6 +92,17 @@ export default function Editor() {
         });
     }, []);
 
+    // Exit fullscreen on Escape
+    useEffect(() => {
+        const onKeyDown = (e: KeyboardEvent) => {
+            if (e.key === 'Escape' && isPreviewFullscreen) {
+                setIsPreviewFullscreen(false);
+            }
+        };
+        window.addEventListener('keydown', onKeyDown);
+        return () => window.removeEventListener('keydown', onKeyDown);
+    }, [isPreviewFullscreen]);
+
     // Fetch assets on load
     useEffect(() => {
         fetch('/api/upload')
@@ -109,7 +132,7 @@ export default function Editor() {
             .catch(console.error);
     }, []);
 
-    const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const file = e.target.files?.[0];
         if (!file) return;
 
@@ -158,13 +181,17 @@ export default function Editor() {
             setIsUploading(false);
             e.target.value = ''; // Reset input
         }
-    };
+    }, []);
 
     // Dynamic total frames based on content + buffer
     const maxClipEnd = Math.max(0, ...clips.map(c => (c.startFrame || 0) + (c.durationInFrames || 0)));
     const totalFrames = Math.max(300, (isNaN(maxClipEnd) ? 0 : maxClipEnd) + 150); // Minimum 10s, or content + 5s buffer
 
-    const inputProps = useMemo(() => ({ clips, primaryColor }), [clips, primaryColor]);
+    const inputProps = useMemo(() => ({
+        clips,
+        primaryColor,
+        assetBaseUrl: typeof window !== 'undefined' ? window.location.origin : undefined,
+    }), [clips, primaryColor]);
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
 
@@ -231,21 +258,45 @@ export default function Editor() {
     }, [selectedClipId]);
 
     // Use callback ref to ensure we capture the player instance once it's available
-    const onPlayerRef = React.useCallback((ref: PlayerRef) => {
-        setPlayer(ref);
+    const onMainPlayerRef = React.useCallback((ref: PlayerRef | null) => {
+        mainPlayerRef.current = ref;
+        if (!isPreviewFullscreen && ref) setPlayer(ref);
+    }, [isPreviewFullscreen]);
+
+    const onFullscreenPlayerRef = React.useCallback((ref: PlayerRef | null) => {
+        const frame = getEditorFrame();
+        if (ref) {
+            ref.seekTo(frame);
+            setPlayer(ref);
+        } else {
+            setPlayer(mainPlayerRef.current);
+            if (mainPlayerRef.current && wasFullscreenRef.current) {
+                mainPlayerRef.current.seekTo(frame);
+            }
+        }
+        wasFullscreenRef.current = !!ref;
     }, []);
 
-    // Sync frame from player
+    // Sync frame to external store (no Editor re-renders) - throttled every 3 frames
+    const lastFrameRef = useRef(-1);
     useEffect(() => {
         if (!player) return;
 
         const handleFrameUpdate = (e: any) => {
-            // @ts-ignore
-            setCurrentFrame(e.detail.frame);
+            const frame = (e as { detail?: { frame?: number } }).detail?.frame ?? 0;
+            currentFrameRef.current = frame;
+            if (Math.abs(frame - lastFrameRef.current) >= 3) {
+                lastFrameRef.current = frame;
+                setEditorFrame(frame);
+            }
         };
 
-        const handlePlay = () => setIsPlaying(true);
-        const handlePause = () => setIsPlaying(false);
+        const handlePlay = () => { lastFrameRef.current = -1; setIsPlaying(true); };
+        const handlePause = () => {
+            setIsPlaying(false);
+            const f = player.getCurrentFrame?.() ?? lastFrameRef.current;
+            if (f >= 0) { setEditorFrame(f); lastFrameRef.current = f; currentFrameRef.current = f; }
+        };
 
         player.addEventListener('frameupdate', handleFrameUpdate);
         player.addEventListener('play', handlePlay);
@@ -255,33 +306,32 @@ export default function Editor() {
             player.removeEventListener('frameupdate', handleFrameUpdate);
             player.removeEventListener('play', handlePlay);
             player.removeEventListener('pause', handlePause);
-        }
+        };
     }, [player]);
 
-    const handleUpdateClip = (key: keyof Clip, value: any) => {
+    const handleUpdateClip = useCallback((key: keyof Clip, value: any) => {
         if (!selectedClipId) return;
         setClips(clips.map(c => c.id === selectedClipId ? { ...c, [key]: value } : c));
-    };
+    }, [selectedClipId, clips]);
 
-    const handleBatchUpdateClip = (updates: Partial<Clip>) => {
+    const handleBatchUpdateClip = useCallback((updates: Partial<Clip>) => {
         if (!selectedClipId) return;
         setClips(clips.map(c => c.id === selectedClipId ? { ...c, ...updates } : c));
-    };
+    }, [selectedClipId, clips]);
 
-    const handleUpdateStyle = (key: string, value: any) => {
+    const handleUpdateStyle = useCallback((key: string, value: any) => {
         if (!selectedClip) return;
         const newStyle = { ...selectedClip.style, [key]: value };
         handleUpdateClip('style', newStyle);
-    };
+    }, [selectedClip, handleUpdateClip]);
 
-    const handleUpdateAnimation = (key: string, value: any) => {
+    const handleUpdateAnimation = useCallback((key: string, value: any) => {
         if (!selectedClip) return;
         const newAnimation = { ...selectedClip.animation, [key]: value };
-        // Ensure defaults if adding animation for first time
         if (!selectedClip.animation && !newAnimation.duration) newAnimation.duration = 10;
         if (!selectedClip.animation && !newAnimation.type) newAnimation.type = 'fade';
         handleUpdateClip('animation', newAnimation);
-    };
+    }, [selectedClip, handleUpdateClip]);
 
     const checkCollision = (id: string, start: number, duration: number, track: number) => {
         const end = start + duration;
@@ -293,9 +343,9 @@ export default function Editor() {
         );
     };
 
-    const addClip = (type: ClipType, contentOverride?: string, durationOverride?: number, startFrameOverride?: number, trackIdOverride?: number) => {
+    const addClip = useCallback((type: ClipType, contentOverride?: string, durationOverride?: number, startFrameOverride?: number, trackIdOverride?: number) => {
         const duration = durationOverride ? Math.ceil(durationOverride * 30) : 60;
-        let start = startFrameOverride ?? currentFrame;
+        let start = startFrameOverride ?? currentFrameRef.current;
         let trackId = trackIdOverride ?? (type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2);
 
         // Find next available slot if collision
@@ -398,7 +448,7 @@ export default function Editor() {
         };
         setClips([...clips, newClip]);
         setSelectedClipId(newClip.id);
-    };
+    }, [clips, tracks]);
 
     const handleTimelineDrop = (e: React.DragEvent, trackId: number, frame: number) => {
         try {
@@ -411,17 +461,17 @@ export default function Editor() {
         }
     };
 
-    const removeClip = () => {
+    const removeClip = useCallback(() => {
         if (!selectedClipId) return;
         setClips(clips.filter(c => c.id !== selectedClipId));
         setSelectedClipId(null);
-    };
+    }, [selectedClipId, clips]);
 
-    const handleSeek = (frame: number) => {
-        if (player) {
-            player.seekTo(frame);
-        }
-    };
+    const handleSeek = useCallback((frame: number) => {
+        setEditorFrame(frame);
+        currentFrameRef.current = frame;
+        if (player) player.seekTo(frame);
+    }, [player]);
 
     const togglePlay = () => {
         if (player) {
@@ -533,15 +583,16 @@ export default function Editor() {
         if (!clip) return;
 
         // Check if playhead is within clip
-        if (currentFrame <= clip.startFrame || currentFrame >= clip.startFrame + clip.durationInFrames) {
+        const frame = getEditorFrame();
+        if (frame <= clip.startFrame || frame >= clip.startFrame + clip.durationInFrames) {
             alert("Playhead must be inside the clip to split.");
             return;
         }
 
-        const splitOffset = currentFrame - clip.startFrame;
+        const splitOffset = frame - clip.startFrame;
         const firstPartDuration = splitOffset;
         const secondPartDuration = clip.durationInFrames - splitOffset;
-        const secondPartStart = currentFrame;
+        const secondPartStart = frame;
 
         // Validate min duration (e.g., 1 frame)
         if (firstPartDuration < 1 || secondPartDuration < 1) return;
@@ -650,7 +701,10 @@ export default function Editor() {
             const response = await fetch('/api/render', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ clips }),
+                body: JSON.stringify({
+                    clips,
+                    assetBaseUrl: window.location.origin, // Next.jsサーバーのURL（エクスポート時にPSD等を取得するため）
+                }),
             });
 
             if (!response.ok) {
@@ -737,7 +791,6 @@ export default function Editor() {
                         {activeTab === 'properties' ? (
                             <PropertiesPanel
                                 selectedClip={selectedClip || null}
-                                currentFrame={currentFrame}
                                 localVolume={localVolume}
                                 setLocalVolume={setLocalVolume}
                                 handleUpdateClip={handleUpdateClip}
@@ -788,7 +841,7 @@ export default function Editor() {
                                     <input type="file" className="hidden" accept=".json" onChange={handleLoadProject} />
                                 </label>
                                 <div className="h-4 w-px bg-border"></div>
-                                <Select value={i18n.resolvedLanguage || 'en'} onValueChange={(val) => i18n.changeLanguage(val)}>
+                                <Select value={language} onValueChange={handleLanguageChange}>
                                     <SelectTrigger className="h-8 w-[90px] text-xs gap-1 px-2 border-none bg-transparent hover:bg-accent focus:ring-0">
                                         <Globe size={14} className="text-muted-foreground" />
                                         <SelectValue />
@@ -826,10 +879,21 @@ export default function Editor() {
                             <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
                             {/* Grid pattern */}
                             <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)] pointer-events-none" />
-                            {/* Video Player */}
+                            {/* Fullscreen toggle */}
+                            <Button
+                                variant="secondary"
+                                size="icon"
+                                className="absolute top-4 right-4 z-30 h-9 w-9 rounded-md bg-black/60 hover:bg-black/80 border border-white/10"
+                                onClick={(e) => { e.stopPropagation(); setIsPreviewFullscreen(true); }}
+                                title={t('editor.preview.fullscreen')}
+                            >
+                                <Maximize2 size={16} />
+                            </Button>
+                            {/* Video Player - skip when fullscreen to avoid double Player render */}
                             <div className="relative shadow-2xl rounded-sm overflow-hidden border border-white/10 bg-black h-full max-w-full aspect-video flex justify-center items-center">
+                                {!isPreviewFullscreen && (
                                 <Player
-                                    ref={onPlayerRef}
+                                    ref={onMainPlayerRef}
                                     component={ResultVideo}
                                     inputProps={inputProps}
                                     durationInFrames={totalFrames}
@@ -842,38 +906,12 @@ export default function Editor() {
                                         height: '100%',
                                     }}
                                 />
-                                {clips.filter(c =>
-                                    currentFrame >= c.startFrame &&
-                                    currentFrame < c.startFrame + c.durationInFrames &&
-                                    c.id !== selectedClipId &&
-                                    ['text', 'image', 'shape', 'code', 'tachie', 'flow'].includes(c.type) // Only positionable types
-                                ).map(clip => {
-                                    const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
-                                    const x = isPositioned ? (clip.x || 0) : 0;
-                                    const y = isPositioned ? (clip.y || 0) : 0;
-                                    const width = isPositioned ? (clip.width || 400) : 1280;
-                                    const height = isPositioned ? (clip.height || 400) : 720;
-
-                                    return (
-                                        <div
-                                            key={clip.id}
-                                            style={{
-                                                position: 'absolute',
-                                                left: `${(x / 1280) * 100}%`,
-                                                top: `${(y / 720) * 100}%`,
-                                                width: `${(width / 1280) * 100}%`,
-                                                height: `${(height / 720) * 100}%`,
-                                                zIndex: 40, // Below InteractOverlay (50)
-                                                cursor: 'pointer',
-                                            }}
-                                            onClick={(e) => {
-                                                e.stopPropagation();
-                                                setSelectedClipId(clip.id);
-                                            }}
-                                            className="hover:ring-2 hover:ring-blue-500/30 transition-all rounded-sm"
-                                        />
-                                    );
-                                })}
+                                )}
+                                <PreviewClipOverlays
+                                    clips={clips}
+                                    selectedClipId={selectedClipId}
+                                    onClipClick={setSelectedClipId}
+                                />
                                 <InteractOverlay
                                     clip={selectedClip}
                                     onUpdate={handleBatchUpdateClip}
@@ -894,8 +932,8 @@ export default function Editor() {
                             <Button variant="ghost" size="icon" onClick={() => handleSeek(totalFrames)}>
                                 <SkipForward size={18} />
                             </Button>
-                            <div className="absolute right-4 text-xs font-mono text-muted-foreground">
-                                {currentFrame} / {totalFrames} F
+                            <div className="absolute right-4">
+                                <FrameDisplay totalFrames={totalFrames} />
                             </div>
                         </div>
                     </div>
@@ -907,7 +945,6 @@ export default function Editor() {
                 <Timeline
                     tracks={tracks}
                     clips={clips}
-                    currentFrame={currentFrame}
                     onSeek={handleSeek}
                     onClipClick={id => setSelectedClipId(id)}
                     onClipMove={handleClipMove}
@@ -968,6 +1005,61 @@ export default function Editor() {
                 )
             }
 
+            {/* Fullscreen Preview Overlay */}
+            {isPreviewFullscreen && (
+                <div className="fixed inset-0 z-[100] flex flex-col bg-black">
+                    <div className="absolute top-4 right-4 z-50">
+                        <Button
+                            variant="secondary"
+                            size="icon"
+                            className="h-10 w-10 rounded-md bg-white/10 hover:bg-white/20 border border-white/20"
+                            onClick={() => setIsPreviewFullscreen(false)}
+                            title={t('editor.preview.exitFullscreen')}
+                        >
+                            <X size={20} />
+                        </Button>
+                    </div>
+                    <div className="flex-1 flex items-center justify-center p-4 min-h-0">
+                        <div className="w-full h-full max-w-[calc(100vh*16/9)] max-h-full aspect-video flex justify-center items-center">
+                            <Player
+                                ref={onFullscreenPlayerRef}
+                                component={ResultVideo}
+                                inputProps={inputProps}
+                                durationInFrames={totalFrames}
+                                compositionWidth={1280}
+                                compositionHeight={720}
+                                fps={30}
+                                controls={false}
+                                style={{
+                                    width: '100%',
+                                    height: '100%',
+                                }}
+                            />
+                        </div>
+                    </div>
+                    <div className="px-4 py-3 bg-black/80 border-t border-white/10 shrink-0 space-y-2">
+                        <FrameSeekBar
+                            totalFrames={totalFrames}
+                            onSeek={handleSeek}
+                            className="w-full h-2 bg-white/20 rounded-full appearance-none cursor-pointer [&::-webkit-slider-thumb]:appearance-none [&::-webkit-slider-thumb]:w-4 [&::-webkit-slider-thumb]:h-4 [&::-webkit-slider-thumb]:rounded-full [&::-webkit-slider-thumb]:bg-primary [&::-webkit-slider-thumb]:cursor-pointer [&::-webkit-slider-thumb]:shadow-lg [&::-moz-range-thumb]:w-4 [&::-moz-range-thumb]:h-4 [&::-moz-range-thumb]:rounded-full [&::-moz-range-thumb]:bg-primary [&::-moz-range-thumb]:border-0 [&::-moz-range-thumb]:cursor-pointer"
+                        />
+                        <div className="flex items-center justify-center gap-4">
+                            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={() => handleSeek(0)}>
+                                <SkipBack size={20} />
+                            </Button>
+                            <Button variant="outline" size="icon" className="rounded-full h-12 w-12 border-primary/50 bg-primary/20 text-primary hover:bg-primary/30" onClick={togglePlay}>
+                                {isPlaying ? <Pause size={20} fill="currentColor" /> : <Play size={20} fill="currentColor" />}
+                            </Button>
+                            <Button variant="ghost" size="icon" className="text-white hover:bg-white/10" onClick={() => handleSeek(totalFrames)}>
+                                <SkipForward size={20} />
+                            </Button>
+                            <div className="ml-4">
+                                <FullscreenFrameDisplay totalFrames={totalFrames} />
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            )}
 
             <AiGeneratorDialog
                 open={isAiOpen}
