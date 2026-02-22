@@ -3,7 +3,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogD
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
-import { Loader2, Sparkles, AlertCircle, Settings, CheckCircle2, Layers as LayersIcon, Folder, ChevronRight, ChevronDown } from 'lucide-react';
+import { Loader2, Sparkles, AlertCircle, Settings, CheckCircle2, Layers as LayersIcon, Folder, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
 import { Clip } from '@/types';
 import { readPsd } from 'ag-psd';
 
@@ -290,7 +290,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                         className="h-6 w-6 absolute top-1 right-1 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100"
                                         onClick={() => removeCharacter(data.id)}
                                     >
-                                        <AlertCircle size={14} />
+                                        <Trash2 size={14} />
                                     </Button>
 
                                     <div className="flex gap-2 mb-2 items-center">
