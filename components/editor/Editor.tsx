@@ -13,7 +13,7 @@ import { useTranslation } from 'react-i18next';
 import {
     Download, Box, Play, Pause, SkipBack, SkipForward,
     Loader2, Save, FolderOpen, Globe, Scissors, Copy, Trash2,
-    Maximize2, X
+    Maximize2, X, ChevronLeft, ChevronRight, Settings2, Library, Smile
 } from 'lucide-react';
 import { readPsd } from 'ag-psd';
 import { getAIVoicePresets } from '@/lib/aivoice';
@@ -22,6 +22,7 @@ import { AssetsPanel } from './AssetsPanel';
 import { AiGeneratorDialog } from './AiGeneratorDialog';
 import { IconBrowser } from './IconBrowser';
 import { Sparkles } from 'lucide-react';
+import { Group, Panel, Separator } from 'react-resizable-panels';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
 import { Asset, getMediaDuration, getMediaDimensions } from './utils';
@@ -68,6 +69,7 @@ export default function Editor() {
     const [player, setPlayer] = useState<PlayerRef | null>(null);
 
     const [activeTab, setActiveTab] = useState<'properties' | 'assets' | 'icons'>('properties');
+    const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [localVolume, setLocalVolume] = useState<number | null>(null);
@@ -971,217 +973,310 @@ export default function Editor() {
     };
 
 
+    const [sidebarWidth, setSidebarWidth] = useState(380);
+    const isResizingSidebar = useRef(false);
+
+    const startResizing = useCallback((e: React.MouseEvent) => {
+        isResizingSidebar.current = true;
+        document.addEventListener('mousemove', handleMouseMoveSidebar);
+        document.addEventListener('mouseup', stopResizing);
+        document.body.style.cursor = 'col-resize';
+    }, []);
+
+    const stopResizing = useCallback(() => {
+        isResizingSidebar.current = false;
+        document.removeEventListener('mousemove', handleMouseMoveSidebar);
+        document.removeEventListener('mouseup', stopResizing);
+        document.body.style.cursor = 'default';
+    }, []);
+
+    const handleMouseMoveSidebar = useCallback((e: MouseEvent) => {
+        if (!isResizingSidebar.current) return;
+        const newWidth = Math.max(300, Math.min(600, e.clientX));
+        setSidebarWidth(newWidth);
+    }, []);
+
     return (
         <div className="flex flex-col h-screen w-full bg-background text-foreground overflow-hidden font-sans">
+            <div className="flex flex-1 overflow-hidden">
+                {/* VS Code style Activity Bar (Permanent) */}
+                <nav className="w-16 border-r border-border bg-card flex flex-col items-center py-4 z-30 shrink-0 select-none">
+                    <div className="size-10 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(109,40,217,0.5)] mb-8">
+                        <Box className="text-primary-foreground fill-current" size={20} />
+                    </div>
 
-            {/* Top Section: Sidebar + Preview */}
-            <div className="flex flex-1 min-h-0">
-                {/* Sidebar */}
-                <aside className="w-80 border-r border-border bg-card flex flex-col z-20 shadow-xl overflow-hidden">
-                    <div className="p-4 border-b border-border flex items-center gap-3 bg-card sticky top-0">
-                        <div className="size-8 rounded-lg bg-primary flex items-center justify-center shadow-[0_0_15px_rgba(109,40,217,0.5)]">
-                            <Box className="text-primary-foreground fill-current" size={18} />
+                    <div className="flex flex-col gap-4">
+                        <button
+                            onClick={() => {
+                                if (activeTab === 'properties' && !isSidebarCollapsed) {
+                                    setIsSidebarCollapsed(true);
+                                } else {
+                                    setActiveTab('properties');
+                                    setIsSidebarCollapsed(false);
+                                }
+                            }}
+                            className={`size-11 rounded-xl flex items-center justify-center transition-all ${activeTab === 'properties' && !isSidebarCollapsed ? 'text-primary bg-primary/15 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/80'}`}
+                            title={t('editor.tabs.properties')}
+                        >
+                            <Settings2 size={24} strokeWidth={activeTab === 'properties' && !isSidebarCollapsed ? 2.5 : 2} />
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (activeTab === 'assets' && !isSidebarCollapsed) {
+                                    setIsSidebarCollapsed(true);
+                                } else {
+                                    setActiveTab('assets');
+                                    setIsSidebarCollapsed(false);
+                                }
+                            }}
+                            className={`size-11 rounded-xl flex items-center justify-center transition-all ${activeTab === 'assets' && !isSidebarCollapsed ? 'text-primary bg-primary/15 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/80'}`}
+                            title={t('editor.tabs.assets')}
+                        >
+                            <Library size={24} strokeWidth={activeTab === 'assets' && !isSidebarCollapsed ? 2.5 : 2} />
+                        </button>
+                        <button
+                            onClick={() => {
+                                if (activeTab === 'icons' && !isSidebarCollapsed) {
+                                    setIsSidebarCollapsed(true);
+                                } else {
+                                    setActiveTab('icons');
+                                    setIsSidebarCollapsed(false);
+                                }
+                            }}
+                            className={`size-11 rounded-xl flex items-center justify-center transition-all ${activeTab === 'icons' && !isSidebarCollapsed ? 'text-primary bg-primary/15 shadow-[0_0_15px_rgba(139,92,246,0.2)]' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/80'}`}
+                            title="Icons"
+                        >
+                            <Smile size={24} strokeWidth={activeTab === 'icons' && !isSidebarCollapsed ? 2.5 : 2} />
+                        </button>
+                    </div>
+
+                    <div className="mt-auto">
+                        <Button variant="ghost" size="icon" className="text-muted-foreground hover:text-foreground">
+                            <Globe size={20} />
+                        </Button>
+                    </div>
+                </nav>
+
+                {/* Resizable Content Panel (Folding Animation) */}
+                <aside
+                    style={{ width: isSidebarCollapsed ? '0px' : `${sidebarWidth}px` }}
+                    className={`bg-card/50 backdrop-blur-sm flex flex-col z-20 shadow-inner overflow-hidden shrink-0 transition-[width] duration-300 ease-in-out ${!isSidebarCollapsed ? 'border-r border-border' : ''}`}
+                >
+                    <div className="min-w-[300px] h-full flex flex-col" style={{ width: `${sidebarWidth}px` }}>
+                        <div className="p-4 border-b border-border/50 flex items-center justify-between bg-card/30 sticky top-0 font-sans h-14 shrink-0">
+                            <h2 className="font-semibold text-sm uppercase tracking-wider text-muted-foreground truncate">
+                                {activeTab === 'properties' ? t('editor.tabs.properties') : activeTab === 'assets' ? t('editor.tabs.assets') : 'Icons'}
+                            </h2>
+                            <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-8 w-8 text-muted-foreground hover:text-foreground rounded-lg"
+                                onClick={() => setIsSidebarCollapsed(true)}
+                                title="Collapse Sidebar"
+                            >
+                                <ChevronLeft size={18} />
+                            </Button>
                         </div>
-                        <h1 className="font-bold text-xl tracking-tight bg-clip-text text-transparent bg-gradient-to-r from-white to-white/60">Omoti</h1>
-                    </div>
 
-                    {/* Tab Switcher */}
-                    <div className="flex border-b border-border bg-card shrink-0">
-                        <button
-                            onClick={() => setActiveTab('properties')}
-                            className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'properties' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
-                        >
-                            {t('editor.tabs.properties')}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('assets')}
-                            className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'assets' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
-                        >
-                            {t('editor.tabs.assets')}
-                        </button>
-                        <button
-                            onClick={() => setActiveTab('icons')}
-                            className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'icons' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
-                        >
-                            Icons
-                        </button>
-                    </div>
-
-                    <div className="flex-1 overflow-y-auto p-4 space-y-6">
-                        {activeTab === 'properties' ? (
-                            <PropertiesPanel
-                                selectedClip={selectedClip || null}
-                                localVolume={localVolume}
-                                setLocalVolume={setLocalVolume}
-                                handleUpdateClip={handleUpdateClip}
-                                handleBatchUpdateClip={handleBatchUpdateClip}
-                                handleUpdateStyle={handleUpdateStyle}
-                                handleUpdateAnimation={handleUpdateAnimation}
-                                removeClip={removeClip}
-                                addClip={addClip}
-                                tachiePresets={tachiePresets}
-                                setTachiePresets={setTachiePresets}
-                                availableLayers={availableLayers}
-                                collapsedPaths={collapsedPaths}
-                                setCollapsedPaths={setCollapsedPaths}
-                                pathsWithChildren={pathsWithChildren}
-                                aiVoicePresets={aiVoicePresets}
-                                selectedAiVoicePreset={selectedAiVoicePreset}
-                                setSelectedAiVoicePreset={setSelectedAiVoicePreset}
-                                isSynthesizing={isSynthesizing}
-                                setIsSynthesizing={setIsSynthesizing}
-                                primaryColor={primaryColor}
-                                setPrimaryColor={setPrimaryColor}
-                                t={t}
-                            />
-                        ) : activeTab === 'assets' ? (
-                            <AssetsPanel
-                                handleFileUpload={handleFileUpload}
-                                uploadFiles={uploadFiles}
-                                isUploading={isUploading}
-                                assets={assets}
-                                addClip={addClip}
-                                removeAsset={removeAsset}
-                                t={t}
-                            />
-                        ) : (
-                            <IconBrowser addClip={addClip} />
-                        )}
+                        <div className="flex-1 overflow-y-auto p-4 space-y-6">
+                            {activeTab === 'properties' ? (
+                                <PropertiesPanel
+                                    selectedClip={selectedClip || null}
+                                    localVolume={localVolume}
+                                    setLocalVolume={setLocalVolume}
+                                    handleUpdateClip={handleUpdateClip}
+                                    handleBatchUpdateClip={handleBatchUpdateClip}
+                                    handleUpdateStyle={handleUpdateStyle}
+                                    handleUpdateAnimation={handleUpdateAnimation}
+                                    removeClip={removeClip}
+                                    addClip={addClip}
+                                    tachiePresets={tachiePresets}
+                                    setTachiePresets={setTachiePresets}
+                                    availableLayers={availableLayers}
+                                    collapsedPaths={collapsedPaths}
+                                    setCollapsedPaths={setCollapsedPaths}
+                                    pathsWithChildren={pathsWithChildren}
+                                    aiVoicePresets={aiVoicePresets}
+                                    selectedAiVoicePreset={selectedAiVoicePreset}
+                                    setSelectedAiVoicePreset={setSelectedAiVoicePreset}
+                                    isSynthesizing={isSynthesizing}
+                                    setIsSynthesizing={setIsSynthesizing}
+                                    primaryColor={primaryColor}
+                                    setPrimaryColor={setPrimaryColor}
+                                    t={t}
+                                />
+                            ) : activeTab === 'assets' ? (
+                                <AssetsPanel
+                                    handleFileUpload={handleFileUpload}
+                                    uploadFiles={uploadFiles}
+                                    isUploading={isUploading}
+                                    assets={assets}
+                                    addClip={addClip}
+                                    removeAsset={removeAsset}
+                                    t={t}
+                                />
+                            ) : (
+                                <IconBrowser addClip={addClip} />
+                            )}
+                        </div>
                     </div>
                 </aside>
 
-                {/* Preview Area */}
-                <main className="flex-1 flex flex-col bg-stone-950 relative overflow-hidden">
-                    <header className="h-14 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md z-10">
-                        <div className="text-sm text-muted-foreground flex items-center gap-4">
-                            <span>{t('editor.header.project')}: <span className="text-foreground font-medium">New Video 01</span></span>
-                            <div className="h-4 w-px bg-border"></div>
-                            <div className="flex items-center gap-1">
-                                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveProject} title={t('editor.header.save')}>
-                                    <Save size={16} />
-                                </Button>
-                                <label className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8" title={t('editor.header.load')}>
-                                    <FolderOpen size={16} />
-                                    <input type="file" className="hidden" accept=".json" onChange={handleLoadProject} />
-                                </label>
-                                <div className="h-4 w-px bg-border"></div>
-                                <Select value={language} onValueChange={handleLanguageChange}>
-                                    <SelectTrigger className="h-8 w-[90px] text-xs gap-1 px-2 border-none bg-transparent hover:bg-accent focus:ring-0">
-                                        <Globe size={14} className="text-muted-foreground" />
-                                        <SelectValue />
-                                    </SelectTrigger>
-                                    <SelectContent align="end">
-                                        <SelectItem value="en">English</SelectItem>
-                                        <SelectItem value="ja">日本語</SelectItem>
-                                    </SelectContent>
-                                </Select>
+                {/* Splitter/Resizer for side panel - Smoothly hides with panel */}
+                <div
+                    onMouseDown={startResizing}
+                    style={{
+                        opacity: isSidebarCollapsed ? 0 : 1,
+                        width: isSidebarCollapsed ? 0 : '4px',
+                        visibility: isSidebarCollapsed ? 'hidden' : 'visible'
+                    }}
+                    className="h-full bg-border/30 hover:bg-primary/40 transition-all cursor-col-resize active:bg-primary flex flex-col justify-center items-center group/sep z-30 shrink-0"
+                >
+                    <div className="h-10 w-0.5 bg-muted-foreground/10 group-hover/sep:bg-primary/40 rounded-full transition-colors" />
+                </div>
+
+                <div className="flex-1 flex flex-col min-w-0">
+                    <Group orientation="vertical">
+                        <Panel defaultSize={60} minSize={30} className="flex flex-col relative min-h-0 bg-stone-950">
+                            <header className="h-14 shrink-0 border-b border-border/50 flex items-center justify-between px-6 bg-background/80 backdrop-blur-md z-10 w-full">
+                                <div className="text-sm text-muted-foreground flex items-center gap-4">
+                                    <span>{t('editor.header.project')}: <span className="text-foreground font-medium">New Video 01</span></span>
+                                    <div className="h-4 w-px bg-border"></div>
+                                    <div className="flex items-center gap-1">
+                                        <Button variant="ghost" size="icon" className="h-8 w-8" onClick={handleSaveProject} title={t('editor.header.save')}>
+                                            <Save size={16} />
+                                        </Button>
+                                        <label className="cursor-pointer inline-flex items-center justify-center rounded-md text-sm font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 hover:bg-accent hover:text-accent-foreground h-8 w-8" title={t('editor.header.load')}>
+                                            <FolderOpen size={16} />
+                                            <input type="file" className="hidden" accept=".json" onChange={handleLoadProject} />
+                                        </label>
+                                        <div className="h-4 w-px bg-border"></div>
+                                        <Select value={language} onValueChange={handleLanguageChange}>
+                                            <SelectTrigger className="h-8 w-[90px] text-xs gap-1 px-2 border-none bg-transparent hover:bg-accent focus:ring-0">
+                                                <Globe size={14} className="text-muted-foreground" />
+                                                <SelectValue />
+                                            </SelectTrigger>
+                                            <SelectContent align="end">
+                                                <SelectItem value="en">English</SelectItem>
+                                                <SelectItem value="ja">日本語</SelectItem>
+                                            </SelectContent>
+                                        </Select>
+                                    </div>
+                                </div>
+                                <div>
+                                    <Button
+                                        className="h-8 shadow-[0_0_20px_rgba(109,40,217,0.3)] transition-all hover:shadow-[0_0_30px_rgba(109,40,217,0.5)]"
+                                        size="sm"
+                                        onClick={handleExport}
+                                        disabled={isExporting}
+                                    >
+                                        {isExporting ? <Loader2 className="mr-2 size-3 animate-spin" /> : <Download className="mr-2 size-3" />}
+                                        {isExporting ? t('editor.header.exporting') : t('editor.header.export')}
+                                    </Button>
+                                    <Button
+                                        className="ml-2 h-8 bg-purple-600 hover:bg-purple-700 text-white border border-purple-400/20 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
+                                        size="sm"
+                                        onClick={() => setIsAiOpen(true)}
+                                    >
+                                        <Sparkles className="mr-2 size-3" />
+                                        AI Create
+                                    </Button>
+                                </div>
+                            </header>
+
+                            <div className="flex-1 flex flex-col relative min-h-0">
+                                {/* Viewport */}
+                                <div className="flex-1 flex items-center justify-center bg-stone-950/20 p-8 overflow-hidden relative" onClick={() => setSelectedClipId(null)}>
+                                    <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
+                                    {/* Grid pattern */}
+                                    <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)] pointer-events-none" />
+                                    {/* Fullscreen toggle */}
+                                    <Button
+                                        variant="secondary"
+                                        size="icon"
+                                        className="absolute top-4 right-4 z-30 h-9 w-9 rounded-md bg-black/60 hover:bg-black/80 border border-white/10"
+                                        onClick={(e) => { e.stopPropagation(); setIsPreviewFullscreen(true); }}
+                                        title={t('editor.preview.fullscreen')}
+                                    >
+                                        <Maximize2 size={16} />
+                                    </Button>
+                                    {/* Video Player - skip when fullscreen to avoid double Player render */}
+                                    <div className="relative shadow-2xl rounded-sm overflow-hidden border border-white/10 bg-black h-full max-w-full aspect-video flex justify-center items-center">
+                                        {!isPreviewFullscreen && (
+                                            <Player
+                                                ref={onMainPlayerRef}
+                                                component={ResultVideo}
+                                                inputProps={inputProps}
+                                                durationInFrames={totalFrames}
+                                                compositionWidth={1280}
+                                                compositionHeight={720}
+                                                fps={30}
+                                                controls={false}
+                                                style={{
+                                                    width: '100%',
+                                                    height: '100%',
+                                                }}
+                                            />
+                                        )}
+                                        <PreviewClipOverlays
+                                            clips={clips}
+                                            selectedClipId={selectedClipId}
+                                            onClipClick={setSelectedClipId}
+                                        />
+                                        <InteractOverlay
+                                            clip={selectedClip}
+                                            onUpdate={handleBatchUpdateClip}
+                                            width={1280}
+                                            height={720}
+                                        />
+                                    </div>
+                                </div>
+
+                                {/* Transport Controls */}
+                                <div className="h-12 bg-card border-t border-border flex items-center justify-center gap-4 z-20 shrink-0">
+                                    <Button variant="ghost" size="icon" onClick={() => handleSeek(0)}>
+                                        <SkipBack size={18} />
+                                    </Button>
+                                    <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-primary/50 bg-primary/10 text-primary hover:bg-primary/20" onClick={togglePlay}>
+                                        {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
+                                    </Button>
+                                    <Button variant="ghost" size="icon" onClick={() => handleSeek(totalFrames)}>
+                                        <SkipForward size={18} />
+                                    </Button>
+                                    <div className="absolute right-4">
+                                        <FrameDisplay totalFrames={totalFrames} />
+                                    </div>
+                                </div>
                             </div>
-                        </div>
-                        <Button
-                            className="h-8 shadow-[0_0_20px_rgba(109,40,217,0.3)] transition-all hover:shadow-[0_0_30px_rgba(109,40,217,0.5)]"
-                            size="sm"
-                            onClick={handleExport}
-                            disabled={isExporting}
-                        >
-                            {isExporting ? <Loader2 className="mr-2 size-3 animate-spin" /> : <Download className="mr-2 size-3" />}
-                            {isExporting ? t('editor.header.exporting') : t('editor.header.export')}
-                        </Button>
-                        <Button
-                            className="ml-2 h-8 bg-purple-600 hover:bg-purple-700 text-white border border-purple-400/20 shadow-[0_0_15px_rgba(168,85,247,0.4)]"
-                            size="sm"
-                            onClick={() => setIsAiOpen(true)}
-                        >
-                            <Sparkles className="mr-2 size-3" />
-                            AI Create
-                        </Button>
+                        </Panel>
 
-                    </header>
+                        <Separator className="h-1.5 bg-border/50 hover:bg-primary/40 transition-all cursor-row-resize active:bg-primary flex justify-center items-center group/sep-v z-40">
+                            <div className="w-10 h-1 bg-muted-foreground/20 group-hover/sep-v:bg-primary/60 rounded-full transition-colors" />
+                        </Separator>
 
-                    <div className="flex-1 flex flex-col relative min-h-0">
-                        {/* Viewport */}
-                        <div className="flex-1 flex items-center justify-center bg-stone-950/20 p-8 overflow-hidden relative" onClick={() => setSelectedClipId(null)}>
-                            <div className="absolute inset-0 bg-[url('https://grainy-gradients.vercel.app/noise.svg')] opacity-20 pointer-events-none" />
-                            {/* Grid pattern */}
-                            <div className="absolute inset-0 bg-[linear-gradient(rgba(255,255,255,0.03)_1px,transparent_1px),linear-gradient(90deg,rgba(255,255,255,0.03)_1px,transparent_1px)] bg-[size:50px_50px] [mask-image:radial-gradient(ellipse_at_center,black_40%,transparent_100%)] pointer-events-none" />
-                            {/* Fullscreen toggle */}
-                            <Button
-                                variant="secondary"
-                                size="icon"
-                                className="absolute top-4 right-4 z-30 h-9 w-9 rounded-md bg-black/60 hover:bg-black/80 border border-white/10"
-                                onClick={(e) => { e.stopPropagation(); setIsPreviewFullscreen(true); }}
-                                title={t('editor.preview.fullscreen')}
-                            >
-                                <Maximize2 size={16} />
-                            </Button>
-                            {/* Video Player - skip when fullscreen to avoid double Player render */}
-                            <div className="relative shadow-2xl rounded-sm overflow-hidden border border-white/10 bg-black h-full max-w-full aspect-video flex justify-center items-center">
-                                {!isPreviewFullscreen && (
-                                    <Player
-                                        ref={onMainPlayerRef}
-                                        component={ResultVideo}
-                                        inputProps={inputProps}
-                                        durationInFrames={totalFrames}
-                                        compositionWidth={1280}
-                                        compositionHeight={720}
-                                        fps={30}
-                                        controls={false}
-                                        style={{
-                                            width: '100%',
-                                            height: '100%',
-                                        }}
-                                    />
-                                )}
-                                <PreviewClipOverlays
+                        {/* Bottom: Timeline */}
+                        <Panel defaultSize={40} minSize={20} className="shadow-[0_-5px_20px_rgba(0,0,0,0.3)] z-30">
+                            <div className="h-full w-full">
+                                <Timeline
+                                    tracks={tracks}
                                     clips={clips}
+                                    onSeek={handleSeek}
+                                    onClipClick={id => setSelectedClipId(id)}
+                                    onClipMove={handleClipMove}
+                                    onClipResize={handleClipResize}
+                                    onTimelineDrop={handleTimelineDrop}
+                                    onAddTrack={handleAddTrack}
+                                    onUpdateTrackName={handleTrackNameChange}
+                                    onRemoveTrack={handleRemoveTrack}
+                                    onContextMenu={handleClipContextMenu}
                                     selectedClipId={selectedClipId}
-                                    onClipClick={setSelectedClipId}
-                                />
-                                <InteractOverlay
-                                    clip={selectedClip}
-                                    onUpdate={handleBatchUpdateClip}
-                                    width={1280}
-                                    height={720}
+                                    totalFrames={totalFrames}
                                 />
                             </div>
-                        </div>
-
-                        {/* Transport Controls */}
-                        <div className="h-12 bg-card border-t border-border flex items-center justify-center gap-4 z-20">
-                            <Button variant="ghost" size="icon" onClick={() => handleSeek(0)}>
-                                <SkipBack size={18} />
-                            </Button>
-                            <Button variant="outline" size="icon" className="rounded-full h-10 w-10 border-primary/50 bg-primary/10 text-primary hover:bg-primary/20" onClick={togglePlay}>
-                                {isPlaying ? <Pause size={18} fill="currentColor" /> : <Play size={18} fill="currentColor" />}
-                            </Button>
-                            <Button variant="ghost" size="icon" onClick={() => handleSeek(totalFrames)}>
-                                <SkipForward size={18} />
-                            </Button>
-                            <div className="absolute right-4">
-                                <FrameDisplay totalFrames={totalFrames} />
-                            </div>
-                        </div>
-                    </div>
-                </main>
-            </div >
-
-            {/* Bottom: Timeline */}
-            < div className="h-[300px] flex-shrink-0 z-30 shadow-[0_-5px_20px_rgba(0,0,0,0.3)]" >
-                <Timeline
-                    tracks={tracks}
-                    clips={clips}
-                    onSeek={handleSeek}
-                    onClipClick={id => setSelectedClipId(id)}
-                    onClipMove={handleClipMove}
-                    onClipResize={handleClipResize}
-                    onTimelineDrop={handleTimelineDrop}
-                    onAddTrack={handleAddTrack}
-                    onUpdateTrackName={handleTrackNameChange}
-                    onRemoveTrack={handleRemoveTrack}
-                    onContextMenu={handleClipContextMenu}
-                    selectedClipId={selectedClipId}
-                    totalFrames={totalFrames}
-                />
-            </div >
+                        </Panel>
+                    </Group>
+                </div>
+            </div>
 
             {/* Context Menu */}
             {
