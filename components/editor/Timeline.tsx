@@ -228,15 +228,17 @@ export const Timeline: React.FC<TimelineProps> = ({
                         </div>
                     </div>
 
+                    {/* Playhead Line (Absolute overlay over entire timeline including ruler) */}
+                    <div
+                        className="absolute top-0 bottom-0 w-px bg-red-500 z-40 pointer-events-none"
+                        style={{ left: HEADER_WIDTH + (currentFrame * FRAME_WIDTH) }}
+                    >
+                        {/* Red Triangle/Dot at the top of the ruler */}
+                        <div className="size-2 bg-red-500 rounded-full -ml-[3.5px] mt-[12px]" />
+                    </div>
+
                     {/* Tracks Container */}
                     <div className="flex flex-col relative" ref={contentRef}>
-                        {/* Playhead Line (Absolute overlay over tracks) */}
-                        <div
-                            className="absolute top-0 bottom-0 w-px bg-red-500 z-10 pointer-events-none"
-                            style={{ left: HEADER_WIDTH + (currentFrame * FRAME_WIDTH) }}
-                        >
-                            <div className="size-2 bg-red-500 rounded-full -ml-[3.5px] -mt-1" />
-                        </div>
 
                         {tracks.map(track => (
                             <div key={track.id} className="h-12 border-b border-border/20 flex relative group hover:bg-white/5 transition-colors">
