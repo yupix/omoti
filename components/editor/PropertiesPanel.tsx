@@ -480,7 +480,7 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                 )}
                             </div>
                             {/* Style Properties */}
-                            {(selectedClip.type === 'shape' || selectedClip.type === 'text') && (
+                            {(selectedClip.type === 'shape' || selectedClip.type === 'text' || selectedClip.type === 'icon') && (
                                 <div className="space-y-3 pt-2 border-t border-border/50">
                                     <div className="space-y-1">
                                         <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.color')}</Label>
@@ -488,7 +488,7 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                             <Input
                                                 type="color"
                                                 value={(selectedClip.style?.backgroundColor as string) || (selectedClip.style?.color as string) || '#ffffff'}
-                                                onChange={e => handleUpdateStyle(selectedClip.type === 'text' ? 'color' : 'backgroundColor', e.target.value)}
+                                                onChange={e => handleUpdateStyle((selectedClip.type === 'text' || selectedClip.type === 'icon') ? 'color' : 'backgroundColor', e.target.value)}
                                                 className="w-full h-8 p-1 cursor-pointer"
                                             />
                                         </div>

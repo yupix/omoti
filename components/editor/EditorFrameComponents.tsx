@@ -66,7 +66,7 @@ export function PreviewClipOverlays({
                         currentFrame >= c.startFrame &&
                         currentFrame < c.startFrame + c.durationInFrames &&
                         c.id !== selectedClipId &&
-                        ['text', 'image', 'shape', 'code', 'tachie', 'flow', 'video'].includes(c.type)
+                        ['text', 'image', 'shape', 'code', 'tachie', 'flow', 'video', 'icon'].includes(c.type)
                 )
                 .map((clip) => {
                     const isPositioned =

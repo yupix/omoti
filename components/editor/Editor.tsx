@@ -20,6 +20,7 @@ import { getAIVoicePresets } from '@/lib/aivoice';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssetsPanel } from './AssetsPanel';
 import { AiGeneratorDialog } from './AiGeneratorDialog';
+import { IconBrowser } from './IconBrowser';
 import { Sparkles } from 'lucide-react';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
@@ -66,7 +67,7 @@ export default function Editor() {
     const [isExporting, setIsExporting] = useState(false);
     const [player, setPlayer] = useState<PlayerRef | null>(null);
 
-    const [activeTab, setActiveTab] = useState<'properties' | 'assets'>('properties');
+    const [activeTab, setActiveTab] = useState<'properties' | 'assets' | 'icons'>('properties');
     const [assets, setAssets] = useState<Asset[]>([]);
     const [isUploading, setIsUploading] = useState(false);
     const [localVolume, setLocalVolume] = useState<number | null>(null);
@@ -463,8 +464,8 @@ export default function Editor() {
             }
         }
 
-        let finalW = widthOverride ?? ((type === 'text') ? 800 : (type === 'code' || type === 'flow') ? 600 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined);
-        let finalH = heightOverride ?? ((type === 'text') ? 200 : (type === 'code' || type === 'flow') ? 400 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined);
+        let finalW = widthOverride ?? ((type === 'text') ? 800 : (type === 'code' || type === 'flow') ? 600 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : (type === 'icon') ? 100 : undefined);
+        let finalH = heightOverride ?? ((type === 'text') ? 200 : (type === 'code' || type === 'flow') ? 400 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : (type === 'icon') ? 100 : undefined);
 
         if (finalW !== undefined && finalH !== undefined && (type === 'image' || type === 'video' || type === 'tachie')) {
             const FIT_W = 1200; // Leave some margin
@@ -484,18 +485,19 @@ export default function Editor() {
             durationInFrames: duration,
             width: finalW,
             height: finalH,
-            x: (type === 'text') ? 240 : (type === 'code' || type === 'flow') ? 340 : (type === 'image' || type === 'tachie' || type === 'video') ? Math.max(0, (1280 - (finalW ?? 600)) / 2) : undefined,
-            y: (type === 'text') ? 500 : (type === 'code' || type === 'flow') ? 160 : (type === 'image' || type === 'tachie' || type === 'video') ? Math.max(0, (720 - (finalH ?? 600)) / 2) : undefined,
+            x: (type === 'text') ? 240 : (type === 'code' || type === 'flow') ? 340 : (type === 'image' || type === 'tachie' || type === 'video') ? Math.max(0, (1280 - (finalW ?? 600)) / 2) : (type === 'icon') ? Math.max(0, (1280 - (finalW ?? 100)) / 2) : undefined,
+            y: (type === 'text') ? 500 : (type === 'code' || type === 'flow') ? 160 : (type === 'image' || type === 'tachie' || type === 'video') ? Math.max(0, (720 - (finalH ?? 600)) / 2) : (type === 'icon') ? Math.max(0, (720 - (finalH ?? 100)) / 2) : undefined,
             content: contentOverride || (
                 type === 'text' ? 'New Text' :
                     type === 'audio' ? 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' :
                         type === 'shape' ? 'rect' :
                             type === 'code' ? 'console.log("Hello World");' :
                                 type === 'flow' ? 'New Flow' :
-                                    'https://picsum.photos/seed/picsum/800/450'
+                                    type === 'icon' ? 'lucide:star' :
+                                        'https://picsum.photos/seed/picsum/800/450'
             ),
             title: `New ${contentOverride || type}`,
-            style: type === 'shape' ? { backgroundColor: '#ffffff' } : {},
+            style: type === 'shape' ? { backgroundColor: '#ffffff' } : type === 'icon' ? { color: '#ffffff' } : {},
             animation: { type: 'none', duration: 0 }, // Default animation
             language: type === 'code' ? 'typescript' : undefined,
             steps: type === 'code' ? [{ code: 'console.log("Hello World");', frameOffset: 0 }] : undefined,
@@ -997,6 +999,12 @@ export default function Editor() {
                         >
                             {t('editor.tabs.assets')}
                         </button>
+                        <button
+                            onClick={() => setActiveTab('icons')}
+                            className={`flex-1 py-3 text-xs font-medium uppercase tracking-wider transition-colors ${activeTab === 'icons' ? 'text-primary border-b-2 border-primary bg-primary/5' : 'text-muted-foreground hover:text-foreground hover:bg-secondary/50'}`}
+                        >
+                            Icons
+                        </button>
                     </div>
 
                     <div className="flex-1 overflow-y-auto p-4 space-y-6">
@@ -1026,7 +1034,7 @@ export default function Editor() {
                                 setPrimaryColor={setPrimaryColor}
                                 t={t}
                             />
-                        ) : (
+                        ) : activeTab === 'assets' ? (
                             <AssetsPanel
                                 handleFileUpload={handleFileUpload}
                                 uploadFiles={uploadFiles}
@@ -1036,6 +1044,8 @@ export default function Editor() {
                                 removeAsset={removeAsset}
                                 t={t}
                             />
+                        ) : (
+                            <IconBrowser addClip={addClip} />
                         )}
                     </div>
                 </aside>

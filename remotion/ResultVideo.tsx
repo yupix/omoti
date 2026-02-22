@@ -1,6 +1,7 @@
 import { AbsoluteFill, Sequence, useCurrentFrame, Audio, Video, interpolate, spring, useVideoConfig, Img } from 'remotion';
 import { resolveAssetUrl } from './utils';
 import { Gif } from '@remotion/gif';
+import { Icon } from '@iconify/react';
 import React from 'react';
 import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
@@ -399,6 +400,16 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                             sandbox="allow-scripts"
                         />
                     </div>
+                </div>
+            </div>
+        );
+    }
+
+    if (clip.type === 'icon') {
+        return (
+            <div style={positionStyle}>
+                <div style={innerMediaStyle}>
+                    <Icon icon={clip.content} style={{ width: '100%', height: '100%', color: clip.style?.color || '#ffffff' }} />
                 </div>
             </div>
         );

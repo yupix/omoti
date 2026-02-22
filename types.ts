@@ -1,4 +1,4 @@
-export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code' | 'tachie' | 'flow' | 'browser';
+export type ClipType = 'text' | 'image' | 'video' | 'audio' | 'shape' | 'code' | 'tachie' | 'flow' | 'browser' | 'icon';
 
 
 export interface Clip {
