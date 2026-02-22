@@ -646,6 +646,7 @@ export default function Editor() {
     const isNavigatingHistoryRef = useRef(false);
 
     // Save history whenever state changes (unless we are undoing/redoing)
+    // Debounced to prevent saving thousands of states when dragging/cropping
     useEffect(() => {
         if (!isLoaded) return;
         if (isNavigatingHistoryRef.current) {
@@ -653,27 +654,31 @@ export default function Editor() {
             return;
         }
 
-        const currentState = { clips, tracks, primaryColor };
+        const timeout = setTimeout(() => {
+            const currentState = { clips, tracks, primaryColor };
 
-        // Prevent pushing duplicate states sequentially
-        const lastState = historyRef.current[historyIndexRef.current];
-        if (lastState && JSON.stringify(lastState) === JSON.stringify(currentState)) {
-            return;
-        }
+            // Prevent pushing duplicate states sequentially
+            const lastState = historyRef.current[historyIndexRef.current];
+            if (lastState && JSON.stringify(lastState) === JSON.stringify(currentState)) {
+                return;
+            }
 
-        // If we are not at the end of the history (i.e. we undid something), truncate future history
-        if (historyIndexRef.current < historyRef.current.length - 1) {
-            historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
-        }
+            // If we are not at the end of the history (i.e. we undid something), truncate future history
+            if (historyIndexRef.current < historyRef.current.length - 1) {
+                historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+            }
 
-        historyRef.current.push(currentState);
+            historyRef.current.push(currentState);
 
-        // Limit history to 50 items to prevent huge memory usage in localStorage/RAM
-        if (historyRef.current.length > 50) {
-            historyRef.current.shift();
-        } else {
-            historyIndexRef.current++;
-        }
+            // Limit history to 50 items to prevent huge memory usage in localStorage/RAM
+            if (historyRef.current.length > 50) {
+                historyRef.current.shift();
+            } else {
+                historyIndexRef.current++;
+            }
+        }, 500);
+
+        return () => clearTimeout(timeout);
     }, [clips, tracks, primaryColor, isLoaded]);
 
     const handleUndo = useCallback(() => {
