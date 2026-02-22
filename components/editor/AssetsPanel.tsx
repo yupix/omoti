@@ -31,6 +31,7 @@ interface AssetsPanelProps {
     deleteFolder: (id: string) => void;
     moveAssetToFolder: (assetUrl: string, folderId?: string) => void;
     moveFolderToFolder: (sourceId: string, targetId?: string) => void;
+    renameAsset: (assetUrl: string, newName: string) => void;
     t: TFunction;
 }
 
@@ -49,10 +50,11 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     deleteFolder,
     moveAssetToFolder,
     moveFolderToFolder,
+    renameAsset,
     t
 }) => {
     const [isDragActive, setIsDragActive] = useState(false);
-    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; url: string } | null>(null);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; url: string; name: string } | null>(null);
     const [folderContextMenu, setFolderContextMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
     const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number; parentId?: string } | null>(null);
     const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(['root']));
@@ -90,6 +92,11 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
         if (name && name !== currentName) renameFolder(id, name);
     };
 
+    const handleRenameAsset = (url: string, currentName: string) => {
+        const name = prompt('Rename Asset:', currentName);
+        if (name && name !== currentName) renameAsset(url, name);
+    };
+
     const onDrop = (e: React.DragEvent, targetFolderId?: string) => {
         e.preventDefault();
         e.stopPropagation();
@@ -124,7 +131,7 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
             onContextMenu={(e) => {
                 e.preventDefault();
                 e.stopPropagation();
-                setContextMenu({ x: e.clientX, y: e.clientY, url: asset.url });
+                setContextMenu({ x: e.clientX, y: e.clientY, url: asset.url, name: asset.name });
             }}
             title={`${asset.name} ${asset.duration ? `(${asset.duration.toFixed(1)}s)` : ''}`}
         >
@@ -394,6 +401,16 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                     >
                         <FolderPlus size={14} />
                         New Folder
+                    </button>
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            handleRenameAsset(contextMenu.url, contextMenu.name);
+                            setContextMenu(null);
+                        }}
+                    >
+                        <Edit2 size={14} />
+                        Rename
                     </button>
                     <Separator className="my-1 bg-border/50" />
                     <button

@@ -115,6 +115,10 @@ export default function Editor() {
         setAssets(prev => prev.map(a => a.url === assetUrl ? { ...a, folderId } : a));
     };
 
+    const handleRenameAsset = (assetUrl: string, newName: string) => {
+        setAssets(prev => prev.map(a => a.url === assetUrl ? { ...a, name: newName } : a));
+    };
+
     const handleMoveFolderToFolder = (sourceId: string, targetId?: string) => {
         if (sourceId === targetId) return;
         // Prevent cyclic move
@@ -1174,6 +1178,7 @@ export default function Editor() {
                                     removeAsset={removeAsset}
                                     createFolder={handleCreateFolder}
                                     renameFolder={handleRenameFolder}
+                                    renameAsset={handleRenameAsset}
                                     deleteFolder={handleDeleteFolder}
                                     moveAssetToFolder={handleMoveAssetToFolder}
                                     moveFolderToFolder={handleMoveFolderToFolder}
