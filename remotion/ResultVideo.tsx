@@ -126,9 +126,15 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                 filterString += ` drop-shadow(0 0 ${blur}px ${color})`;
             } else if (effect.type === 'outline') {
                 if (clip.type === 'text') {
-                    // Multi-shadow hack for better text outline
                     const w = width;
-                    textShadowString += `${w}px ${w}px 0 ${color}, -${w}px ${w}px 0 ${color}, ${w}px -${w}px 0 ${color}, -${w}px -${w}px 0 ${color}, `;
+                    // Use 32 points for a truly circular and anti-aliased look
+                    // Adding a tiny 0.5px blur acts as anti-aliasing for the shadow layers
+                    for (let i = 0; i < 32; i++) {
+                        const angle = (i * 2 * Math.PI) / 32;
+                        const x = (Math.cos(angle) * w).toFixed(2);
+                        const y = (Math.sin(angle) * w).toFixed(2);
+                        textShadowString += `${x}px ${y}px 0.5px ${color}, `;
+                    }
                 } else {
                     filterString += ` drop-shadow(${width}px 0 0 ${color}) drop-shadow(-${width}px 0 0 ${color}) drop-shadow(0 ${width}px 0 ${color}) drop-shadow(0 -${width}px 0 ${color})`;
                 }
@@ -189,16 +195,20 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
 
     // Render text
     if (clip.type === 'text') {
+        const baseShadow = '0 4px 10px rgba(0,0,0,0.5)';
+        const effectShadow = effectsStyle.textShadow;
+        const combinedShadow = effectShadow ? `${effectShadow}, ${baseShadow}` : baseShadow;
+
         return (
-            <div style={positionStyle}>
+            <div style={{ ...positionStyle, textShadow: undefined }}>
                 <h1 style={{
                     fontFamily: 'sans-serif',
                     fontSize: '80px',
                     color: 'white',
                     fontWeight: 800,
                     margin: 0,
-                    textShadow: '0 4px 10px rgba(0,0,0,0.5)',
-                    ...clip.style
+                    ...clip.style,
+                    textShadow: combinedShadow,
                 }}>
                     {clip.content}
                 </h1>
