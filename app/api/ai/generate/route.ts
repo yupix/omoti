@@ -262,105 +262,124 @@ export async function POST(req: NextRequest) {
             // Character Clip Selection
             const sceneCharacterName = scene.character;
             const targetCharacter = tachies.find((t: any) => t.name === sceneCharacterName) || tachies[0];
-            const activeTachieUrl = targetCharacter?.url || PSD_PATH;
+            const hasTachie = tachies.length > 0;
 
-            let tachieLayers: string[] = [];
-            const emotion = scene.emotion || 'neutral';
+            if (hasTachie) {
+                const activeTachieUrl = targetCharacter?.url || PSD_PATH;
 
-            // Determine Layout & Content
+                let tachieLayers: string[] = [];
+                const emotion = scene.emotion || 'neutral';
+
+                // Determine Layout & Content
+                const codeBlocks = scene.codeBlocks || (scene.codeContent ? [{ code: scene.codeContent, language: 'tsx', fileName: 'Code' }] : []);
+                const hasCode = codeBlocks.length > 0;
+                const hasPreview = !!scene.previewContent;
+
+                const previewLayout = scene.previewLayout || 'split';
+                const isOverlay = previewLayout === 'overlay';
+                const previewDelay = Math.max(0, Math.min(1, scene.previewDelay || 0)); // Clamp 0-1
+
+                let tachieLayout = { x: 50, y: 150, width: 600, height: 600 };
+
+                // Apply position override if provided by LLM
+                if (scene.position === 'right') {
+                    tachieLayout = { x: 680, y: 150, width: 600, height: 600 };
+                } else if (scene.position === 'center') {
+                    tachieLayout = { x: 340, y: 150, width: 600, height: 600 };
+                } else if (hasCode && hasPreview && !isOverlay) {
+                    // Tri-layout: Tachie (Left Edge) | Code (Center) | Preview (Right)
+                    tachieLayout = { x: -100, y: 220, width: 540, height: 540 };
+                } else if (hasCode) {
+                    // Split-layout: Tachie (Left) | Code (Right)
+                    tachieLayout = { x: 0, y: 150, width: 600, height: 600 };
+                }
+
+                let mouthOpenLayers: string[] = [];
+                let mouthClosedLayers: string[] = [];
+
+                // Layer Resolution
+                if (scriptData.tachieConfigs && scriptData.tachieConfigs[sceneCharacterName]) {
+                    const config = scriptData.tachieConfigs[sceneCharacterName];
+                    tachieLayers = config[emotion] || config['neutral'] || [];
+                    mouthOpenLayers = config.mouthOpen || [];
+                    mouthClosedLayers = config.mouthClosed || [];
+                } else if (scriptData.tachieConfig && !sceneCharacterName) {
+                    // Backward compatibility / Single character mode
+                    tachieLayers = scriptData.tachieConfig[emotion] || scriptData.tachieConfig['neutral'] || [];
+                    mouthOpenLayers = scriptData.tachieConfig.mouthOpen || [];
+                    mouthClosedLayers = scriptData.tachieConfig.mouthClosed || [];
+                } else {
+                    // Fallback: Hardcoded Akane Logic
+                    const AKANE_BASE_LAYERS = [
+                        '琴葉姉妹', '琴葉姉妹/!後ろ髪', '琴葉姉妹/!後ろ髪/*あかねちゃん', '琴葉姉妹/!後ろ髪/!もみあげ',
+                        '琴葉姉妹/胴体', '琴葉姉妹/胴体/*あかねちゃん', '琴葉姉妹/胴体/*あかねちゃん/腕/!右腕/*下',
+                        '琴葉姉妹/胴体/*あかねちゃん/腕/!左腕/*下', '琴葉姉妹/胴体/*あかねちゃん/!胴体/!足/*立っている',
+                        '琴葉姉妹/胴体/*あかねちゃん/!胴体/*下にしている', '琴葉姉妹/胴体/*あかねちゃん/!装飾',
+                        '琴葉姉妹/!素体', '琴葉姉妹/ほっぺた/*上', '琴葉姉妹/手前に出てる腕', '琴葉姉妹/!前髪',
+                        '琴葉姉妹/!前髪/*あかねちゃん', '琴葉姉妹/!前髪/*あかねちゃん/!髪飾り右/*あかねちゃん',
+                        '琴葉姉妹/!前髪/*あかねちゃん/*標準', '琴葉姉妹/!表情'
+                    ];
+
+                    const TACHIE_EMOTIONS: Record<string, string[]> = {
+                        neutral: ['琴葉姉妹/!表情/目/*縦目', '琴葉姉妹/!表情/口/*ｖ', '琴葉姉妹/!表情/眉毛/*普通/*1'],
+                        happy: ['琴葉姉妹/!表情/目/*ニコ', '琴葉姉妹/!表情/口/*ω', '琴葉姉妹/!表情/眉毛/*普通/*1'],
+                        sad: ['琴葉姉妹/!表情/目/*ゼロ目', '琴葉姉妹/!表情/口/*ム', '琴葉姉妹/!表情/眉毛/*普通/*3'],
+                        surprised: ['琴葉姉妹/!表情/目/*縦目', '琴葉姉妹/!表情/口/*□', '琴葉姉妹/!表情/眉毛/*普通/*2'],
+                        serious: ['琴葉姉妹/!表情/目/*ジト目→', '琴葉姉妹/!表情/口/*-', '琴葉姉妹/!表情/眉毛/*普通/*2']
+                    };
+
+                    const emotionLayers = TACHIE_EMOTIONS[emotion] || TACHIE_EMOTIONS['neutral'];
+                    tachieLayers = [...AKANE_BASE_LAYERS, ...emotionLayers];
+
+                    // Fallback Mouth Sync
+                    mouthOpenLayers = ['琴葉姉妹/!表情/口/*あ'];
+                    mouthClosedLayers = ['琴葉姉妹/!表情/口/*ん', '琴葉姉妹/!表情/口/*ｖ'];
+                }
+
+                clips.push({
+                    id: `char-${i}`,
+                    type: 'tachie',
+                    trackId: 2,
+                    startFrame: currentFrame,
+                    durationInFrames: totalSceneFrames,
+                    content: activeTachieUrl,
+                    title: `${sceneCharacterName || 'Character'} (${emotion})`,
+                    x: tachieLayout.x,
+                    y: tachieLayout.y,
+                    width: tachieLayout.width,
+                    height: tachieLayout.height,
+                    tachieLayers: tachieLayers,
+                    effects: scene.effects || [],
+                    audioUrl: audioUrl,
+                    mouthOpenLayers,
+                    mouthClosedLayers,
+                    mandatoryLayers: targetCharacter?.rules?.mandatory || [],
+                    animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
+                });
+            }
+
             const codeBlocks = scene.codeBlocks || (scene.codeContent ? [{ code: scene.codeContent, language: 'tsx', fileName: 'Code' }] : []);
             const hasCode = codeBlocks.length > 0;
             const hasPreview = !!scene.previewContent;
-
             const previewLayout = scene.previewLayout || 'split';
             const isOverlay = previewLayout === 'overlay';
-            const previewDelay = Math.max(0, Math.min(1, scene.previewDelay || 0)); // Clamp 0-1
-
-            let tachieLayout = { x: 50, y: 150, width: 600, height: 600 };
-
-            // Apply position override if provided by LLM
-            if (scene.position === 'right') {
-                tachieLayout = { x: 680, y: 150, width: 600, height: 600 };
-            } else if (scene.position === 'center') {
-                tachieLayout = { x: 340, y: 150, width: 600, height: 600 };
-            } else if (hasCode && hasPreview && !isOverlay) {
-                // Tri-layout: Tachie (Left Edge) | Code (Center) | Preview (Right)
-                tachieLayout = { x: -100, y: 220, width: 540, height: 540 };
-            } else if (hasCode) {
-                // Split-layout: Tachie (Left) | Code (Right)
-                tachieLayout = { x: 0, y: 150, width: 600, height: 600 };
-            }
-
-            let mouthOpenLayers: string[] = [];
-            let mouthClosedLayers: string[] = [];
-
-            // Layer Resolution
-            if (scriptData.tachieConfigs && scriptData.tachieConfigs[sceneCharacterName]) {
-                const config = scriptData.tachieConfigs[sceneCharacterName];
-                tachieLayers = config[emotion] || config['neutral'] || [];
-                mouthOpenLayers = config.mouthOpen || [];
-                mouthClosedLayers = config.mouthClosed || [];
-            } else if (scriptData.tachieConfig && !sceneCharacterName) {
-                // Backward compatibility / Single character mode
-                tachieLayers = scriptData.tachieConfig[emotion] || scriptData.tachieConfig['neutral'] || [];
-                mouthOpenLayers = scriptData.tachieConfig.mouthOpen || [];
-                mouthClosedLayers = scriptData.tachieConfig.mouthClosed || [];
-            } else {
-                // Fallback: Hardcoded Akane Logic
-                const AKANE_BASE_LAYERS = [
-                    '琴葉姉妹', '琴葉姉妹/!後ろ髪', '琴葉姉妹/!後ろ髪/*あかねちゃん', '琴葉姉妹/!後ろ髪/!もみあげ',
-                    '琴葉姉妹/胴体', '琴葉姉妹/胴体/*あかねちゃん', '琴葉姉妹/胴体/*あかねちゃん/腕/!右腕/*下',
-                    '琴葉姉妹/胴体/*あかねちゃん/腕/!左腕/*下', '琴葉姉妹/胴体/*あかねちゃん/!胴体/!足/*立っている',
-                    '琴葉姉妹/胴体/*あかねちゃん/!胴体/*下にしている', '琴葉姉妹/胴体/*あかねちゃん/!装飾',
-                    '琴葉姉妹/!素体', '琴葉姉妹/ほっぺた/*上', '琴葉姉妹/手前に出てる腕', '琴葉姉妹/!前髪',
-                    '琴葉姉妹/!前髪/*あかねちゃん', '琴葉姉妹/!前髪/*あかねちゃん/!髪飾り右/*あかねちゃん',
-                    '琴葉姉妹/!前髪/*あかねちゃん/*標準', '琴葉姉妹/!表情'
-                ];
-
-                const TACHIE_EMOTIONS: Record<string, string[]> = {
-                    neutral: ['琴葉姉妹/!表情/目/*縦目', '琴葉姉妹/!表情/口/*ｖ', '琴葉姉妹/!表情/眉毛/*普通/*1'],
-                    happy: ['琴葉姉妹/!表情/目/*ニコ', '琴葉姉妹/!表情/口/*ω', '琴葉姉妹/!表情/眉毛/*普通/*1'],
-                    sad: ['琴葉姉妹/!表情/目/*ゼロ目', '琴葉姉妹/!表情/口/*ム', '琴葉姉妹/!表情/眉毛/*普通/*3'],
-                    surprised: ['琴葉姉妹/!表情/目/*縦目', '琴葉姉妹/!表情/口/*□', '琴葉姉妹/!表情/眉毛/*普通/*2'],
-                    serious: ['琴葉姉妹/!表情/目/*ジト目→', '琴葉姉妹/!表情/口/*-', '琴葉姉妹/!表情/眉毛/*普通/*2']
-                };
-
-                const emotionLayers = TACHIE_EMOTIONS[emotion] || TACHIE_EMOTIONS['neutral'];
-                tachieLayers = [...AKANE_BASE_LAYERS, ...emotionLayers];
-
-                // Fallback Mouth Sync
-                mouthOpenLayers = ['琴葉姉妹/!表情/口/*あ'];
-                mouthClosedLayers = ['琴葉姉妹/!表情/口/*ん', '琴葉姉妹/!表情/口/*ｖ'];
-            }
-
-            clips.push({
-                id: `char-${i}`,
-                type: 'tachie',
-                trackId: 2,
-                startFrame: currentFrame,
-                durationInFrames: totalSceneFrames,
-                content: activeTachieUrl,
-                title: `${sceneCharacterName || 'Character'} (${emotion})`,
-                x: tachieLayout.x,
-                y: tachieLayout.y,
-                width: tachieLayout.width,
-                height: tachieLayout.height,
-                tachieLayers: tachieLayers,
-                effects: scene.effects || [],
-                audioUrl: audioUrl,
-                mouthOpenLayers,
-                mouthClosedLayers,
-                mandatoryLayers: targetCharacter?.rules?.mandatory || [],
-                animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
-            });
+            const previewDelay = Math.max(0, Math.min(1, scene.previewDelay || 0));
 
             if (hasCode) {
                 const availableHeight = 650;
                 const startY = 50;
                 const blockHeight = Math.floor(availableHeight / codeBlocks.length);
-                // Adjust layout: when preview exists (and not overlay), move code left and widen it to prevent cutoff
-                const codeX = (hasPreview && !isOverlay) ? 340 : 600;
-                const codeWidth = (hasPreview && !isOverlay) ? 500 : 600;
+
+                let codeX = 600;
+                let codeWidth = 600;
+
+                if (!hasTachie) {
+                    codeX = (hasPreview && !isOverlay) ? 100 : 140;
+                    codeWidth = (hasPreview && !isOverlay) ? 650 : 1000;
+                } else {
+                    codeX = (hasPreview && !isOverlay) ? 340 : 600;
+                    codeWidth = (hasPreview && !isOverlay) ? 500 : 600;
+                }
 
                 codeBlocks.forEach((block: any, idx: number) => {
                     // Generate line-by-line typing effect
@@ -413,10 +432,14 @@ export async function POST(req: NextRequest) {
                 let previewWidth = 400;
                 let previewHeight = 400;
 
+                if (!hasTachie && !isOverlay) {
+                    previewX = 800; // Shift left a bit if code is wider
+                }
+
                 if (isOverlay) {
-                    previewX = 600; // Center (cover code)
+                    previewX = hasTachie ? 600 : 340; // Center (cover code)
                     previewY = 150; // Align with code block top
-                    previewWidth = 600; // Match code width
+                    previewWidth = hasTachie ? 600 : 600; // Match code width
                     previewHeight = 500; // Slightly larger to cover more of code area
                 }
 
