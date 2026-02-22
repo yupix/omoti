@@ -1,13 +1,22 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
     Loader2, Upload, Volume2, Layers, Plus,
     Image as ImageIcon, Trash2, FolderPlus, Folder as FolderIcon,
-    ChevronDown, ChevronRight, MoreVertical, Edit2
+    ChevronDown, ChevronRight, MoreVertical, Edit2, Search,
+    SortAsc, ArrowUpDown
 } from 'lucide-react';
 import { Asset, AssetFolder } from './utils';
 import { ClipType } from '@/types';
 import { TFunction } from 'i18next';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+    Select,
+    SelectContent,
+    SelectItem,
+    SelectTrigger,
+    SelectValue,
+} from "@/components/ui/select";
 
 interface AssetsPanelProps {
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
@@ -24,6 +33,8 @@ interface AssetsPanelProps {
     moveFolderToFolder: (sourceId: string, targetId?: string) => void;
     t: TFunction;
 }
+
+type SortMode = 'name-asc' | 'name-desc' | 'newest' | 'type';
 
 const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     handleFileUpload,
@@ -46,6 +57,10 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number; parentId?: string } | null>(null);
     const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(['root']));
     const [dropTarget, setDropTarget] = useState<string | null>(null);
+
+    // Search and Sort State
+    const [searchQuery, setSearchQuery] = useState('');
+    const [sortMode, setSortMode] = useState<SortMode>('name-asc');
 
     // Close context menu on click anywhere
     useEffect(() => {
@@ -136,11 +151,48 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
         </div>
     );
 
+    // Filtering and Sorting Process
+    const processedAssets = useMemo(() => {
+        let filtered = assets;
+
+        // Search Filter
+        if (searchQuery.trim()) {
+            const query = searchQuery.toLowerCase();
+            filtered = filtered.filter(a => a.name.toLowerCase().includes(query));
+        }
+
+        // Sort
+        return [...filtered].sort((a, b) => {
+            if (sortMode === 'name-asc') return a.name.localeCompare(b.name);
+            if (sortMode === 'name-desc') return b.name.localeCompare(a.name);
+            if (sortMode === 'type') return a.type.localeCompare(b.type);
+            if (sortMode === 'newest') return 0; // Asset doesn't have date yet, but we could add it.
+            return 0;
+        });
+    }, [assets, searchQuery, sortMode]);
+
+    const processedFolders = useMemo(() => {
+        let filtered = assetFolders;
+
+        // If searching, we might want to only show folders that contain matching assets or match themselves
+        // But for simplicity, let's just sort folders.
+        return [...filtered].sort((a, b) => {
+            if (sortMode === 'name-asc') return a.name.localeCompare(b.name);
+            if (sortMode === 'name-desc') return b.name.localeCompare(a.name);
+            return 0;
+        });
+    }, [assetFolders, sortMode]);
+
     const renderFolder = (folder: AssetFolder, level: number = 0) => {
         const isOpen = openFolders.has(folder.id);
-        const childrenFolders = assetFolders.filter(f => f.parentId === folder.id);
-        const folderAssets = assets.filter(a => a.folderId === folder.id);
+        const childrenFolders = processedFolders.filter(f => f.parentId === folder.id);
+        const folderAssets = processedAssets.filter(a => a.folderId === folder.id);
         const isTarget = dropTarget === folder.id;
+
+        // If searching and this folder has no matching contents and doesn't match name, hide it?
+        // Actually, if processedAssets filters out everything, folderAssets will be empty.
+        // If we are searching, we might want to just show a flat list of assets.
+        if (searchQuery && folderAssets.length === 0 && childrenFolders.length === 0) return null;
 
         return (
             <div key={folder.id} className="select-none">
@@ -189,7 +241,7 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                         <div className="grid grid-cols-2 gap-2">
                             {folderAssets.map(renderAsset)}
                         </div>
-                        {childrenFolders.length === 0 && folderAssets.length === 0 && (
+                        {childrenFolders.length === 0 && folderAssets.length === 0 && !searchQuery && (
                             <p className="text-[10px] text-muted-foreground py-2 text-center italic">Empty</p>
                         )}
                     </div>
@@ -198,11 +250,55 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
         );
     };
 
-    const rootFolders = assetFolders.filter(f => !f.parentId);
-    const rootAssets = assets.filter(a => !a.folderId);
+    const rootFolders = processedFolders.filter(f => !f.parentId);
+    const rootAssets = processedAssets.filter(a => !a.folderId);
 
     return (
         <div className="space-y-4 animate-in slide-in-from-right duration-300 min-h-full pb-20">
+            {/* Search and Sort Bar */}
+            <div className="flex flex-col gap-2">
+                <div className="relative group">
+                    <Search className="absolute left-2.5 top-2.5 h-4 w-4 text-muted-foreground group-focus-within:text-primary transition-colors" />
+                    <Input
+                        placeholder="Search assets..."
+                        value={searchQuery}
+                        onChange={(e) => setSearchQuery(e.target.value)}
+                        className="pl-9 bg-card/30 border-border/50 focus:border-primary/50 transition-all h-9 text-xs"
+                    />
+                    {searchQuery && (
+                        <button
+                            onClick={() => setSearchQuery('')}
+                            className="absolute right-2.5 top-2.5 text-[10px] text-muted-foreground hover:text-foreground font-bold"
+                        >
+                            ESC
+                        </button>
+                    )}
+                </div>
+                <div className="flex items-center gap-2">
+                    <Select value={sortMode} onValueChange={(val) => setSortMode(val as SortMode)}>
+                        <SelectTrigger className="h-8 text-[10px] bg-card/30 border-border/50 flex-1">
+                            <ArrowUpDown className="h-3 w-3 mr-2 opacity-50" />
+                            <SelectValue placeholder="Sort by" />
+                        </SelectTrigger>
+                        <SelectContent>
+                            <SelectItem value="name-asc" className="text-xs">Name (A-Z)</SelectItem>
+                            <SelectItem value="name-desc" className="text-xs">Name (Z-A)</SelectItem>
+                            <SelectItem value="type" className="text-xs">Type</SelectItem>
+                            <SelectItem value="newest" className="text-xs">Newest (Mock)</SelectItem>
+                        </SelectContent>
+                    </Select>
+                    <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-8 w-8 text-muted-foreground hover:text-foreground bg-card/30 border border-border/50"
+                        onClick={() => handleNewFolder()}
+                        title="New Folder"
+                    >
+                        <FolderPlus size={16} />
+                    </Button>
+                </div>
+            </div>
+
             {/* Upload Box */}
             <div
                 className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group ${isDragActive ? 'border-primary bg-primary/10' : 'border-border hover:border-primary hover:bg-primary/5'}`}
@@ -250,23 +346,13 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
             >
                 <div className="flex items-center justify-between mb-2">
                     <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('editor.assets.library')}</h2>
-                    <div className="flex items-center gap-1">
-                        <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
-                            onClick={() => handleNewFolder()}
-                            title="New Folder"
-                        >
-                            <FolderPlus size={16} />
-                        </Button>
-                    </div>
                 </div>
 
                 <div
                     className={`space-y-1 transition-colors rounded-md p-1 min-h-[200px] ${dropTarget === 'root' ? 'bg-primary/5 ring-1 ring-primary/20' : ''}`}
                 >
-                    {/* Folders Hierarchy */}
+                    {/* If searching, and we want to show everything flat, we could change logic here.
+                        But keeping hierarchy is nicer if folders contain what matches. */}
                     {rootFolders.map(folder => renderFolder(folder))}
 
                     {/* Root Assets Grid */}
@@ -274,10 +360,19 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                         {rootAssets.map(renderAsset)}
                     </div>
 
-                    {assets.length === 0 && assetFolders.length === 0 && (
+                    {processedAssets.length === 0 && processedFolders.length === 0 && (
                         <div className="text-center py-8 text-muted-foreground">
-                            <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
-                            <p className="text-xs">{t('editor.assets.empty')}</p>
+                            {searchQuery ? (
+                                <>
+                                    <Search className="mx-auto h-8 w-8 opacity-20 mb-2" />
+                                    <p className="text-xs">No assets match "{searchQuery}"</p>
+                                </>
+                            ) : (
+                                <>
+                                    <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
+                                    <p className="text-xs">{t('editor.assets.empty')}</p>
+                                </>
+                            )}
                         </div>
                     )}
                 </div>
