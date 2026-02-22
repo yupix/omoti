@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Loader2, Upload, Volume2, Layers, Plus, Image as ImageIcon } from 'lucide-react';
 import { Asset } from './utils';
 import { ClipboardEvent } from 'react';
@@ -7,6 +7,7 @@ import { TFunction } from 'i18next';
 
 interface AssetsPanelProps {
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
+    uploadFiles: (files: File[]) => void;
     isUploading: boolean;
     assets: Asset[];
     addClip: (type: ClipType, contentOverride?: string, durationOverride?: number) => void;
@@ -15,21 +16,37 @@ interface AssetsPanelProps {
 
 const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     handleFileUpload,
+    uploadFiles,
     isUploading,
     assets,
     addClip,
     t
 }) => {
+    const [isDragActive, setIsDragActive] = useState(false);
+
     return (
         <div className="space-y-4 animate-in slide-in-from-right duration-300">
             {/* Upload Box */}
             <div
-                className="border-2 border-dashed border-border rounded-lg p-6 flex flex-col items-center justify-center gap-2 hover:border-primary hover:bg-primary/5 transition-all cursor-pointer group"
+                className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group ${isDragActive ? 'border-primary bg-primary/10' : 'border-border hover:border-primary hover:bg-primary/5'}`}
                 onClick={() => document.getElementById('asset-upload')?.click()}
+                onDragOver={(e) => {
+                    e.preventDefault();
+                    setIsDragActive(true);
+                }}
+                onDragLeave={() => setIsDragActive(false)}
+                onDrop={(e) => {
+                    e.preventDefault();
+                    setIsDragActive(false);
+                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                        uploadFiles(Array.from(e.dataTransfer.files));
+                    }
+                }}
             >
                 <input
                     type="file"
                     id="asset-upload"
+                    multiple
                     className="hidden"
                     onChange={handleFileUpload}
                     accept="image/*,video/*,audio/*,.mkv,.flac,.ogg,.wav,.aac,.m4a,.mov,.webm,.webp,.svg,.bmp,.avif"
@@ -37,7 +54,7 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                 <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
                     {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}
                 </div>
-                <div className="text-center">
+                <div className="text-center pointer-events-none">
                     <p className="text-xs font-medium text-foreground">{t('editor.assets.upload.title')}</p>
                     <p className="text-[10px] text-muted-foreground">{t('editor.assets.upload.subtitle')}</p>
                 </div>

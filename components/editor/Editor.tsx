@@ -132,56 +132,64 @@ export default function Editor() {
             .catch(console.error);
     }, []);
 
-    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
-        const file = e.target.files?.[0];
-        if (!file) return;
-
+    const uploadFiles = useCallback(async (files: File[]) => {
         try {
             setIsUploading(true);
-            const formData = new FormData();
-            formData.append('file', file);
+            const newAssets: Asset[] = [];
 
-            const res = await fetch('/api/upload', {
-                method: 'POST',
-                body: formData
-            });
+            for (const file of files) {
+                const formData = new FormData();
+                formData.append('file', file);
 
-            if (!res.ok) throw new Error('Upload failed');
+                const res = await fetch('/api/upload', {
+                    method: 'POST',
+                    body: formData
+                });
 
-            const data = await res.json();
+                if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
 
-            // Refresh assets
-            const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
-                data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
-                    data.name.match(/\.psd$/i) ? 'tachie' : 'image';
+                const data = await res.json();
 
-            const origin = window.location.origin;
-            const fullUrl = `${origin}${data.url}`;
+                // Refresh assets
+                const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
+                    data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
+                        data.name.match(/\.psd$/i) ? 'tachie' : 'image';
 
-            let duration = 0;
-            if (type === 'video' || type === 'audio') {
-                duration = await getMediaDuration(fullUrl, type);
+                const origin = window.location.origin;
+                const fullUrl = `${origin}${data.url}`;
+
+                let duration = 0;
+                if (type === 'video' || type === 'audio') {
+                    duration = await getMediaDuration(fullUrl, type);
+                }
+
+                newAssets.push({
+                    name: data.name,
+                    url: fullUrl,
+                    type,
+                    duration
+                });
             }
 
-            const newAsset: Asset = {
-                name: data.name,
-                url: fullUrl,
-                type,
-                duration
-            };
-            setAssets(prev => [...prev, newAsset]);
-
-            // Auto-switch to assets tab
-            setActiveTab('assets');
-
+            if (newAssets.length > 0) {
+                setAssets(prev => [...prev, ...newAssets]);
+                // Auto-switch to assets tab
+                setActiveTab('assets');
+            }
         } catch (error) {
             console.error(error);
             alert('Upload failed');
         } finally {
             setIsUploading(false);
-            e.target.value = ''; // Reset input
         }
-    }, []);
+    }, [getMediaDuration, setAssets, setActiveTab]);
+
+    const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
+        const files = Array.from(e.target.files || []);
+        if (files.length === 0) return;
+        await uploadFiles(files);
+        e.target.value = ''; // Reset input
+    }, [uploadFiles]);
 
     // Dynamic total frames based on content + buffer
     const maxClipEnd = Math.max(0, ...clips.map(c => (c.startFrame || 0) + (c.durationInFrames || 0)));
@@ -833,6 +841,7 @@ export default function Editor() {
                         ) : (
                             <AssetsPanel
                                 handleFileUpload={handleFileUpload}
+                                uploadFiles={uploadFiles}
                                 isUploading={isUploading}
                                 assets={assets}
                                 addClip={addClip}
