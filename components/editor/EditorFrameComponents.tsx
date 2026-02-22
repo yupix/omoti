@@ -76,8 +76,19 @@ export function PreviewClipOverlays({
                         typeof clip.height === 'number';
                     const x = isPositioned ? (clip.x || 0) : 0;
                     const y = isPositioned ? (clip.y || 0) : 0;
-                    const width = isPositioned ? (clip.width || 400) : 1280;
-                    const height = isPositioned ? (clip.height || 400) : 720;
+                    let width = 1280;
+                    let height = 720;
+
+                    if (isPositioned) {
+                        width = clip.width || 400;
+                        height = clip.height || 400;
+                    } else if (clip.type === 'text') {
+                        width = 800;
+                        height = 200;
+                    } else if (clip.type === 'image' || clip.type === 'tachie') {
+                        width = 600;
+                        height = 600;
+                    }
 
                     return (
                         <div

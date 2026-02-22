@@ -23,8 +23,10 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     // Safe access to clip properties for hooks/logic
     const x = clip?.x ?? 0;
     const y = clip?.y ?? 0;
-    const w = clip?.width ?? (clip?.x === undefined ? compWidth : 400);
-    const h = clip?.height ?? (clip?.x === undefined ? compHeight : 400);
+    const w = clip?.width ?? (clip?.x === undefined ?
+        (clip?.type === 'text' ? 800 : (clip?.type === 'image' || clip?.type === 'tachie') ? 600 : compWidth) : 400);
+    const h = clip?.height ?? (clip?.x === undefined ?
+        (clip?.type === 'text' ? 200 : (clip?.type === 'image' || clip?.type === 'tachie') ? 600 : compHeight) : 400);
     const r = clip?.rotate ?? 0;
 
     const handleMouseDown = (e: React.MouseEvent, mode: 'move' | 'resize' | 'rotate') => {
