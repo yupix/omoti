@@ -17,10 +17,22 @@ const ScriptSchema = z.object({
 
 // AIVOICE Server URL
 const AIVOICE_SERVER = 'http://localhost:8000';
+const VOICEVOX_SERVER = 'http://127.0.0.1:50021';
+
+// Simple WAV duration calculator
+function getWavDuration(buffer: Buffer): number {
+    try {
+        const byteRate = buffer.readUInt32LE(28);
+        const dataSize = buffer.readUInt32LE(40);
+        return dataSize / byteRate;
+    } catch (e) {
+        return 0;
+    }
+}
 
 export async function POST(req: NextRequest) {
     try {
-        const { prompt, preset = "琴葉 茜", apiKey, provider = 'openai', tachies = [] } = await req.json();
+        const { prompt, apiKey, provider = 'openai', tachies = [] } = await req.json();
 
         if (!prompt) {
             return NextResponse.json({ error: 'Prompt is required' }, { status: 400 });
@@ -199,29 +211,67 @@ export async function POST(req: NextRequest) {
             animation: { type: 'pop', duration: 20 }
         });
 
-        const PSD_PATH = "/uploads/1770692241459-_____SD___.psd";
+
 
         for (let i = 0; i < scriptData.scenes.length; i++) {
             const scene = scriptData.scenes[i];
 
+            // 0. Find Target Character
+            const sceneCharacterName = scene.character;
+            const targetCharacter = tachies.find((t: any) => t.name === sceneCharacterName) || tachies[0];
+
             // 1. Generate Audio
             let audioUrl = 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg';
-            let duration = 3;
+            let duration = (scene.text.length * 0.2) + 1.0;
 
             try {
-                const ttsRes = await fetch(`${AIVOICE_SERVER}/synthesize`, {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
-                    body: JSON.stringify({ text: scene.text, preset })
-                });
+                const charVoice = targetCharacter?.voice;
 
-                if (ttsRes.ok) {
-                    const ttsData = await ttsRes.json();
-                    audioUrl = ttsData.url;
-                    duration = Number(ttsData.duration) || 3;
+                if (charVoice?.provider === 'aivoice') {
+                    const ttsRes = await fetch(`${AIVOICE_SERVER}/synthesize`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: scene.text, preset: charVoice.aivoicePreset }),
+                        signal: AbortSignal.timeout(5000)
+                    }).catch(() => null);
+
+                    if (ttsRes && ttsRes.ok) {
+                        const ttsData = await ttsRes.json();
+                        audioUrl = ttsData.url;
+                        duration = Number(ttsData.duration) || duration;
+                    }
+                } else {
+                    // VOICEVOX (Default)
+                    const speakerId = charVoice?.voicevoxStyle || 0;
+                    const queryRes = await fetch(`${VOICEVOX_SERVER}/audio_query?text=${encodeURIComponent(scene.text)}&speaker=${speakerId}`, {
+                        method: 'POST',
+                        signal: AbortSignal.timeout(3000)
+                    }).catch(() => null);
+
+                    if (queryRes && queryRes.ok) {
+                        const queryData = await queryRes.json();
+                        const synthRes = await fetch(`${VOICEVOX_SERVER}/synthesis?speaker=${speakerId}`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(queryData),
+                            signal: AbortSignal.timeout(10000)
+                        }).catch(() => null);
+
+                        if (synthRes && synthRes.ok) {
+                            const audioBuffer = Buffer.from(await synthRes.arrayBuffer());
+                            const filename = `synth-ai-${Date.now()}-${i}.wav`;
+                            const fs = require('fs');
+                            const path = require('path');
+                            const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+                            if (!fs.existsSync(uploadDir)) fs.mkdirSync(uploadDir, { recursive: true });
+                            fs.writeFileSync(path.join(uploadDir, filename), audioBuffer);
+                            audioUrl = `/uploads/${filename}`;
+                            duration = getWavDuration(audioBuffer) || duration;
+                        }
+                    }
                 }
             } catch (err) {
-                console.error("TTS Failed:", err);
+                console.warn("TTS Failed, using fallback:", err);
             }
 
             const frames = Math.ceil(duration * 30);
@@ -260,12 +310,10 @@ export async function POST(req: NextRequest) {
             });
 
             // Character Clip Selection
-            const sceneCharacterName = scene.character;
-            const targetCharacter = tachies.find((t: any) => t.name === sceneCharacterName) || tachies[0];
             const hasTachie = tachies.length > 0;
 
             if (hasTachie) {
-                const activeTachieUrl = targetCharacter?.url || PSD_PATH;
+                const activeTachieUrl = targetCharacter?.url || tachies[0]?.url;
 
                 let tachieLayers: string[] = [];
                 const emotion = scene.emotion || 'neutral';

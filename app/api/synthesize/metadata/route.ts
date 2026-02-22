@@ -12,18 +12,18 @@ export async function GET(req: NextRequest) {
 
     try {
         if (provider === 'aivoice') {
-            const res = await fetch(`${baseUrl}/presets`);
-            if (!res.ok) throw new Error('Failed to fetch AIVOICE presets');
+            const res = await fetch(`${baseUrl}/presets`).catch(() => null);
+            if (!res || !res.ok) return NextResponse.json([]);
             const data = await res.json();
             return NextResponse.json(data.presets || []);
         } else {
-            const res = await fetch(`${baseUrl}/speakers`);
-            if (!res.ok) throw new Error('Failed to fetch VOICEVOX speakers');
+            const res = await fetch(`${baseUrl}/speakers`).catch(() => null);
+            if (!res || !res.ok) return NextResponse.json([]);
             const data = await res.json();
             return NextResponse.json(data);
         }
     } catch (error: any) {
-        console.error('Fetch synth metadata error:', error);
-        return NextResponse.json({ error: error.message }, { status: 500 });
+        console.warn('Fetch synth metadata warning (offline?):', error.message);
+        return NextResponse.json([]);
     }
 }

@@ -25,10 +25,26 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
             mandatory: string[],
             exclusive: { name: string, path: string }[],
             optional: string[]
+        },
+        voice?: {
+            provider: 'voicevox' | 'aivoice',
+            voicevoxSpeaker: string,
+            voicevoxStyle?: number,
+            aivoicePreset: string
         }
     }[]>([]);
     const [configTachie, setConfigTachie] = useState<string | null>(null);
+    const [configTachieTabs, setConfigTachieTabs] = useState<'layers' | 'voice'>('layers');
     const [fullPsdCache, setFullPsdCache] = useState<Record<string, any>>({});
+
+    // Synthesis Metadata for Voice Config
+    const [voicevoxSpeakers, setVoicevoxSpeakers] = useState<any[]>([]);
+    const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
+
+    // From Editor Context (passed via props or fetched here)
+    // For simplicity, let's assume we can fetch them here based on URLs
+    const voicevoxBaseUrl = 'http://127.0.0.1:50021';
+    const aivoiceBaseUrl = 'http://localhost:8000';
     const [loadingLayers, setLoadingLayers] = useState(false);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -47,6 +63,16 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
             } catch (e) {
                 console.error("Failed to load profiles", e);
             }
+        }
+    }, [open]);
+
+    // Load voices
+    useEffect(() => {
+        if (open) {
+            fetch(`/api/synthesize/metadata?provider=voicevox&baseUrl=${encodeURIComponent(voicevoxBaseUrl)}`)
+                .then(r => r.json()).then(setVoicevoxSpeakers).catch(() => { });
+            fetch(`/api/synthesize/metadata?provider=aivoice&baseUrl=${encodeURIComponent(aivoiceBaseUrl)}`)
+                .then(r => r.json()).then(setAiVoicePresets).catch(() => { });
         }
     }, [open]);
 
@@ -148,7 +174,13 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                 url: psdUrl,
                 layers: layers,
                 role: '',
-                rules: { mandatory: [], exclusive: [], optional: [] }
+                rules: { mandatory: [], exclusive: [], optional: [] },
+                voice: {
+                    provider: 'voicevox' as const,
+                    voicevoxSpeaker: '',
+                    voicevoxStyle: undefined,
+                    aivoicePreset: ''
+                }
             }];
             // Try auto-configure for new characters if they look like they need it
             return newData;
@@ -181,7 +213,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                         role: t.role,
                         layers: t.layers,
                         url: t.url,
-                        rules: t.rules
+                        rules: t.rules,
+                        voice: t.voice
                     }))
                 })
             });
@@ -316,9 +349,16 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                             <Button
                                                 variant="ghost" size="sm"
                                                 className="h-6 gap-1 text-[10px] text-primary hover:text-primary hover:bg-primary/10 p-1 mt-0.5 justify-start w-fit shadow-none"
-                                                onClick={() => setConfigTachie(data.id)}
+                                                onClick={() => { setConfigTachie(data.id); setConfigTachieTabs('layers'); }}
                                             >
                                                 <Settings size={10} /> Configuration
+                                            </Button>
+                                            <Button
+                                                variant="ghost" size="sm"
+                                                className="h-6 gap-1 text-[10px] text-primary hover:text-primary hover:bg-primary/10 p-1 mt-0.5 justify-start w-fit shadow-none"
+                                                onClick={() => { setConfigTachie(data.id); setConfigTachieTabs('voice'); }}
+                                            >
+                                                <div className="size-2 rounded-full bg-blue-500 animate-pulse" /> Voice
                                             </Button>
                                             <Button
                                                 variant="ghost" size="sm"
@@ -327,6 +367,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                             >
                                                 <Sparkles size={10} /> Auto-Detect
                                             </Button>
+
                                         </div>
                                     </div>
                                 </div>
@@ -393,147 +434,152 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                             <DialogHeader>
                                 <DialogTitle className="flex items-center gap-2 text-sm">
                                     <LayersIcon size={16} />
-                                    Structure for {tachieData.find(t => t.id === configTachie)?.name || 'Character'}
+                                    {configTachieTabs === 'layers' ? 'Structure' : 'Voice'} for {tachieData.find(t => t.id === configTachie)?.name || 'Character'}
                                 </DialogTitle>
                                 <DialogDescription className="text-xs">
-                                    Pick base/mandatory layers and define selection groups for expressions.
+                                    {configTachieTabs === 'layers'
+                                        ? 'Pick base/mandatory layers and define selection groups for expressions.'
+                                        : 'Select the voice provider and character style for AI synthesis.'}
                                 </DialogDescription>
                             </DialogHeader>
                         </div>
 
-                        <div className="flex-1 overflow-y-auto px-6 py-2 space-y-4 bg-secondary/5">
-                            {(() => {
-                                const data = tachieData.find(t => t.id === configTachie);
-                                if (!data) return null;
+                        <div className="flex-1 overflow-y-auto px-6 py-2 bg-secondary/5">
+                            {configTachieTabs === 'layers' ? (
+                                <div className="space-y-4 py-2">
+                                    {(() => {
+                                        const data = tachieData.find(t => t.id === configTachie);
+                                        if (!data) return null;
 
-                                // Full Layer Tree (Simulated with flat list + hierarchy)
-                                // We use first 3 levels for easy visual navigation
-                                const topFolders = Array.from(new Set(data.layers
-                                    .map(l => l.split('/')[0])
-                                ));
+                                        const topFolders = Array.from(new Set(data.layers.map(l => l.split('/')[0])));
 
-                                const renderLevel = (path: string, depth: number) => {
-                                    const children = data.layers.filter(l => {
-                                        const parts = l.split('/');
-                                        const parent = parts.slice(0, -1).join('/');
-                                        return parent === path;
-                                    });
+                                        const renderLevel = (path: string, depth: number) => {
+                                            const children = data.layers.filter(l => {
+                                                const parts = l.split('/');
+                                                const parent = parts.slice(0, -1).join('/');
+                                                return parent === path;
+                                            });
 
-                                    const subFolders = Array.from(new Set(data.layers
-                                        .filter(l => l.startsWith(path + '/') && l.split('/').length === depth + 2)
-                                        .map(l => l.split('/').slice(0, depth + 2).join('/'))
-                                    ));
+                                            const subFolders = Array.from(new Set(data.layers
+                                                .filter(l => l.startsWith(path + '/') && l.split('/').length === depth + 2)
+                                                .map(l => l.split('/').slice(0, depth + 2).join('/'))
+                                            ));
 
-                                    return (
-                                        <div className="ml-4 border-l border-primary/10 pl-2 mt-1 space-y-1">
-                                            {subFolders.map(sf => {
-                                                const name = sf.split('/').pop();
-                                                const isMandatoryChild = data.rules?.mandatory.some(m => m.startsWith(sf + '/'));
-                                                const isExclusiveChild = data.rules?.exclusive.some(e => e.path.startsWith(sf + '/'));
+                                            return (
+                                                <div className="ml-4 border-l border-primary/10 pl-2 mt-1 space-y-1">
+                                                    {subFolders.map(sf => {
+                                                        const name = sf.split('/').pop();
+                                                        return (
+                                                            <div key={sf} className="space-y-1">
+                                                                <div className="flex items-center justify-between group py-0.5">
+                                                                    <span className="text-[10px] text-muted-foreground flex items-center gap-1">
+                                                                        <Folder size={10} className="text-blue-400" /> {name}
+                                                                    </span>
+                                                                    <div className="flex gap-1">
+                                                                        <button onClick={() => toggleRule(data.id, 'mandatory', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(sf) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
+                                                                        <button onClick={() => toggleRule(data.id, 'exclusive', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.exclusive.some(g => g.path === sf) ? 'bg-purple-500/20 border-purple-500/50 text-purple-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Group</button>
+                                                                        <button onClick={() => toggleRule(data.id, 'optional', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(sf) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
+                                                                    </div>
+                                                                </div>
+                                                                {depth < 3 && renderLevel(sf, depth + 1)}
+                                                            </div>
+                                                        );
+                                                    })}
+                                                    {children.filter(c => !subFolders.some(sf => c.startsWith(sf + '/'))).map(c => {
+                                                        const name = c.split('/').pop();
+                                                        return (
+                                                            <div key={c} className="flex items-center justify-between group py-0.5 pr-1">
+                                                                <span className="text-[9px] text-muted-foreground/80 flex items-center gap-1">
+                                                                    <AlertCircle size={8} className="text-gray-400" /> {name}
+                                                                </span>
+                                                                <div className="flex gap-1">
+                                                                    <button onClick={() => toggleRule(data.id, 'mandatory', c)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(c) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
+                                                                    <button onClick={() => toggleRule(data.id, 'optional', c)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(c) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })}
+                                                </div>
+                                            );
+                                        };
 
-                                                return (
-                                                    <div key={sf} className="space-y-1">
-                                                        <div className="flex items-center justify-between group py-0.5">
-                                                            <span className="text-[10px] text-muted-foreground flex items-center gap-1">
-                                                                <Folder size={10} className="text-blue-400" /> {name}
-                                                            </span>
+                                        return (
+                                            <div className="space-y-4">
+                                                {topFolders.map(tf => (
+                                                    <div key={tf} className="border rounded p-2 bg-background/50 shadow-sm">
+                                                        <div className="flex items-center justify-between border-b border-dashed pb-1 mb-1">
+                                                            <span className="text-[11px] font-bold text-primary flex items-center gap-1"><Folder size={12} /> {tf}</span>
                                                             <div className="flex gap-1">
-                                                                <button
-                                                                    onClick={() => toggleRule(data.id, 'mandatory', sf)}
-                                                                    className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(sf) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                                >
-                                                                    Base
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => toggleRule(data.id, 'exclusive', sf)}
-                                                                    className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.exclusive.some(g => g.path === sf) ? 'bg-purple-500/20 border-purple-500/50 text-purple-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                                >
-                                                                    Group
-                                                                </button>
-                                                                <button
-                                                                    onClick={() => toggleRule(data.id, 'optional', sf)}
-                                                                    className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(sf) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                                >
-                                                                    Extra
-                                                                </button>
+                                                                <button onClick={() => toggleRule(data.id, 'mandatory', tf)} className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${data.rules?.mandatory.includes(tf) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
+                                                                <button onClick={() => toggleRule(data.id, 'exclusive', tf)} className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${data.rules?.exclusive.some(g => g.path === tf) ? 'bg-purple-500/20 border-purple-500/50 text-purple-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Group</button>
+                                                                <button onClick={() => toggleRule(data.id, 'optional', tf)} className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${data.rules?.optional?.includes(tf) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
                                                             </div>
                                                         </div>
-                                                        {depth < 3 && renderLevel(sf, depth + 1)}
+                                                        {renderLevel(tf, 0)}
                                                     </div>
-                                                );
-                                            })}
-                                            {children.filter(c => !subFolders.some(sf => c.startsWith(sf + '/'))).map(c => {
-                                                const name = c.split('/').pop();
-                                                return (
-                                                    <div key={c} className="flex items-center justify-between group py-0.5 pr-1">
-                                                        <span className="text-[9px] text-muted-foreground/80 flex items-center gap-1">
-                                                            <AlertCircle size={8} className="text-gray-400" /> {name}
-                                                        </span>
-                                                        <div className="flex gap-1">
-                                                            <button
-                                                                onClick={() => toggleRule(data.id, 'mandatory', c)}
-                                                                className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(c) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                            >
-                                                                Base
-                                                            </button>
-                                                            <button
-                                                                onClick={() => toggleRule(data.id, 'optional', c)}
-                                                                className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(c) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                            >
-                                                                Extra
-                                                            </button>
-                                                        </div>
-                                                    </div>
-                                                );
-                                            })}
-                                        </div>
-                                    );
-                                };
+                                                ))}
+                                            </div>
+                                        );
+                                    })()}
+                                </div>
+                            ) : (
+                                <div className="space-y-6 py-8">
+                                    {(() => {
+                                        const data = tachieData.find(t => t.id === configTachie);
+                                        if (!data) return null;
+                                        const voice = (data.voice || { provider: 'voicevox' as const }) as NonNullable<typeof data.voice>;
 
-                                return (
-                                    <div className="space-y-4">
-                                        {topFolders.map(tf => (
-                                            <div key={tf} className="border rounded p-2 bg-background/50 shadow-sm">
-                                                <div className="flex items-center justify-between border-b border-dashed pb-1 mb-1">
-                                                    <span className="text-[11px] font-bold text-primary flex items-center gap-1">
-                                                        <Folder size={12} /> {tf}
-                                                    </span>
-                                                    <div className="flex gap-1">
-                                                        <button
-                                                            onClick={() => toggleRule(data.id, 'mandatory', tf)}
-                                                            className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${data.rules?.mandatory.includes(tf) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                        >
-                                                            Base
-                                                        </button>
-                                                        <button
-                                                            onClick={() => toggleRule(data.id, 'exclusive', tf)}
-                                                            className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${data.rules?.exclusive.some(g => g.path === tf) ? 'bg-purple-500/20 border-purple-500/50 text-purple-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                        >
-                                                            Group
-                                                        </button>
-                                                        <button
-                                                            onClick={() => toggleRule(data.id, 'optional', tf)}
-                                                            className={`px-1.5 py-0.5 rounded text-[9px] border transition-all ${data.rules?.optional?.includes(tf) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}
-                                                        >
-                                                            Extra
-                                                        </button>
+                                        return (
+                                            <div className="grid gap-6">
+                                                <div className="grid gap-2">
+                                                    <label className="text-xs font-bold uppercase text-muted-foreground">Voice Provider</label>
+                                                    <div className="flex gap-2">
+                                                        <Button variant={voice.provider === 'voicevox' ? 'default' : 'outline'} className="flex-1 h-12" onClick={() => updateTachieInfo(data.id, 'voice', { ...voice, provider: 'voicevox' as const })}>VOICEVOX</Button>
+                                                        <Button variant={voice.provider === 'aivoice' ? 'default' : 'outline'} className="flex-1 h-12" onClick={() => updateTachieInfo(data.id, 'voice', { ...voice, provider: 'aivoice' as const })}>AIVOICE</Button>
                                                     </div>
                                                 </div>
-                                                {renderLevel(tf, 0)}
+
+                                                {voice.provider === 'voicevox' ? (
+                                                    <>
+                                                        <div className="grid gap-2">
+                                                            <label className="text-xs font-bold uppercase text-muted-foreground">Speaker</label>
+                                                            <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={voice.voicevoxSpeaker || ''} onChange={(e) => {
+                                                                const speaker = voicevoxSpeakers.find((s: any) => s.speaker_uuid === e.target.value);
+                                                                updateTachieInfo(data.id, 'voice', { ...voice, voicevoxSpeaker: e.target.value, voicevoxStyle: speaker?.styles[0]?.id });
+                                                            }}>
+                                                                <option value="">Select Speaker...</option>
+                                                                {voicevoxSpeakers.map((s: any) => <option key={s.speaker_uuid} value={s.speaker_uuid}>{s.name}</option>)}
+                                                            </select>
+                                                        </div>
+                                                        {voice.voicevoxSpeaker && (
+                                                            <div className="grid gap-2">
+                                                                <label className="text-xs font-bold uppercase text-muted-foreground">Style</label>
+                                                                <div className="flex flex-wrap gap-2">
+                                                                    {voicevoxSpeakers.find((s: any) => s.speaker_uuid === voice.voicevoxSpeaker)?.styles.map((style: any) => (
+                                                                        <Button key={style.id} variant={voice.voicevoxStyle === style.id ? 'default' : 'outline'} size="sm" className="px-4" onClick={() => updateTachieInfo(data.id, 'voice', { ...voice, voicevoxStyle: style.id })}>{style.name}</Button>
+                                                                    ))}
+                                                                </div>
+                                                            </div>
+                                                        )}
+                                                    </>
+                                                ) : (
+                                                    <div className="grid gap-2">
+                                                        <label className="text-xs font-bold uppercase text-muted-foreground">Preset</label>
+                                                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={voice.aivoicePreset || ''} onChange={(e) => updateTachieInfo(data.id, 'voice', { ...voice, aivoicePreset: e.target.value })}>
+                                                            <option value="">Select Preset...</option>
+                                                            {aiVoicePresets.map((p: string) => <option key={p} value={p}>{p}</option>)}
+                                                        </select>
+                                                    </div>
+                                                )}
                                             </div>
-                                        ))}
-                                        <div className="p-3 rounded bg-primary/5 text-[10px] text-primary/80 border border-primary/20 space-y-1 sticky bottom-0">
-                                            <p><strong>Base:</strong> Mandatory layers/folders for this specific character profile.</p>
-                                            <p><strong>Group:</strong> Collective folders where AI must choose exactly one child (e.g. Eye shapes, Mouth shapes). In the preview, the first item is shown by default.</p>
-                                            <p><strong>Extra:</strong> Optional layers/folders AI can choose to add flavor (e.g. Sweat, Anger marks, Blinking extras).</p>
-                                        </div>
-                                    </div>
-                                );
-                            })()}
+                                        );
+                                    })()}
+                                </div>
+                            )}
                         </div>
 
                         <div className="p-4 border-t bg-background">
-                            <Button className="w-full" size="sm" onClick={() => setConfigTachie(null)}>Apply Structure</Button>
+                            <Button className="w-full" size="sm" onClick={() => setConfigTachie(null)}>Apply Settings</Button>
                         </div>
                     </div>
                 </DialogContent>
