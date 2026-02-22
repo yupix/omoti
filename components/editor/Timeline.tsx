@@ -31,7 +31,8 @@ const RESIZE_HANDLE_WIDTH = 6; // px
 enum DragType {
     MOVE,
     RESIZE_LEFT,
-    RESIZE_RIGHT
+    RESIZE_RIGHT,
+    SEEK
 }
 
 export const Timeline: React.FC<TimelineProps> = ({
@@ -94,6 +95,12 @@ export const Timeline: React.FC<TimelineProps> = ({
         if (!dragState || !containerRef.current) return;
 
         const currentMouseFrame = getFrameFromMouse(e);
+
+        if (dragState.type === DragType.SEEK) {
+            onSeek(Math.max(0, currentMouseFrame));
+            return;
+        }
+
         const clip = clips.find(c => c.id === dragState.id);
         if (!clip) return;
 
@@ -183,11 +190,19 @@ export const Timeline: React.FC<TimelineProps> = ({
         };
     }, [dragState, clips, onClipMove, tracks]); // Dependencies needed for processMouseMove closure
 
-    const handleHeaderClick = (e: React.MouseEvent<HTMLDivElement>) => {
+    const handleHeaderMouseDown = (e: React.MouseEvent<HTMLDivElement>) => {
         const rect = e.currentTarget.getBoundingClientRect();
         const x = e.clientX - rect.left; // x relative to ruler start
         const frame = Math.max(0, Math.floor(x / FRAME_WIDTH));
         onSeek(frame);
+
+        setDragState({
+            id: 'seek',
+            type: DragType.SEEK,
+            offset: 0,
+            initialStart: 0,
+            initialDuration: 0
+        });
     }
 
     return (
@@ -214,7 +229,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                         <div className="w-48 flex-shrink-0 border-r border-border bg-muted/20 sticky left-0 z-30" />
                         <div
                             className="flex-1 relative cursor-pointer"
-                            onClick={handleHeaderClick}
+                            onMouseDown={handleHeaderMouseDown}
                         >
                             {Array.from({ length: Math.ceil(totalFrames / 50) }).map((_, i) => (
                                 <div
