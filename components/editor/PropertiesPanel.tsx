@@ -14,6 +14,7 @@ import {
 import { FlowEditor } from './FlowEditor';
 import { GOOGLE_FONTS, SYSTEM_FONTS } from '@/lib/fonts';
 import { synthesizeVoice } from '@/lib/aivoice';
+import { synthesizeVoicevox, VoicevoxSpeaker } from '@/lib/voicevox';
 import { TFunction } from 'i18next';
 
 interface PropertiesPanelProps {
@@ -35,6 +36,17 @@ interface PropertiesPanelProps {
     aiVoicePresets: string[];
     selectedAiVoicePreset: string;
     setSelectedAiVoicePreset: (val: string) => void;
+    synthProvider: 'aivoice' | 'voicevox';
+    setSynthProvider: (val: 'aivoice' | 'voicevox') => void;
+    aivoiceBaseUrl: string;
+    setAivoiceBaseUrl: (val: string) => void;
+    voicevoxBaseUrl: string;
+    setVoicevoxBaseUrl: (val: string) => void;
+    voicevoxSpeakers: VoicevoxSpeaker[];
+    selectedVoicevoxSpeaker: string;
+    setSelectedVoicevoxSpeaker: (val: string) => void;
+    selectedVoicevoxStyle: number;
+    setSelectedVoicevoxStyle: (val: number) => void;
     isSynthesizing: boolean;
     setIsSynthesizing: (val: boolean) => void;
     primaryColor: string;
@@ -61,6 +73,17 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
     aiVoicePresets,
     selectedAiVoicePreset,
     setSelectedAiVoicePreset,
+    synthProvider,
+    setSynthProvider,
+    aivoiceBaseUrl,
+    setAivoiceBaseUrl,
+    voicevoxBaseUrl,
+    setVoicevoxBaseUrl,
+    voicevoxSpeakers,
+    selectedVoicevoxSpeaker,
+    setSelectedVoicevoxSpeaker,
+    selectedVoicevoxStyle,
+    setSelectedVoicevoxStyle,
     isSynthesizing,
     setIsSynthesizing,
     primaryColor,
@@ -426,49 +449,137 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                             />
                                         </div>
                                         <div className="pt-2 border-t border-border/50 space-y-3">
-                                            <div className="flex items-center justify-between">
-                                                <Label className="text-[10px] uppercase text-muted-foreground">AIVOICE</Label>
-                                                <Button
-                                                    size="sm"
-                                                    disabled={isSynthesizing || !aiVoicePresets.length}
-                                                    className="h-7 px-3 text-[10px] gap-2"
-                                                    onClick={async () => {
-                                                        try {
-                                                            setIsSynthesizing(true);
-                                                            const result = await synthesizeVoice(selectedClip.content, selectedAiVoicePreset);
-                                                            if (result) {
-                                                                // Add as audio clip
-                                                                const audioDuration = result.duration || 2; // Fallback to 2s if duration is missing/NaN
-                                                                addClip('audio', result.url, audioDuration);
-                                                                // Update current text clip duration to match audio
-                                                                handleUpdateClip('durationInFrames', Math.ceil(audioDuration * 30));
-                                                            } else {
-                                                                alert('Synthesis failed. Is the AIVOICE server running?');
-                                                            }
-                                                        } finally {
-                                                            setIsSynthesizing(false);
-                                                        }
-                                                    }}
-                                                >
-                                                    {isSynthesizing ? <Loader2 size={12} className="animate-spin" /> : <Volume2 size={12} />}
-                                                    {t('editor.properties.generateVoice')}
-                                                </Button>
+                                            <div className="space-y-2">
+                                                <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.voiceSynthesizer') || 'Voice Synthesizer'}</Label>
+                                                <div className="grid grid-cols-2 gap-2">
+                                                    <Button
+                                                        variant={synthProvider === 'aivoice' ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        className="h-7 text-[10px]"
+                                                        onClick={() => setSynthProvider('aivoice')}
+                                                    >
+                                                        AIVOICE
+                                                    </Button>
+                                                    <Button
+                                                        variant={synthProvider === 'voicevox' ? 'default' : 'outline'}
+                                                        size="sm"
+                                                        className="h-7 text-[10px]"
+                                                        onClick={() => setSynthProvider('voicevox')}
+                                                    >
+                                                        VOICEVOX
+                                                    </Button>
+                                                </div>
                                             </div>
-                                            {aiVoicePresets.length > 0 && (
-                                                <Select value={selectedAiVoicePreset} onValueChange={setSelectedAiVoicePreset}>
-                                                    <SelectTrigger className="h-8 text-xs bg-background/50">
-                                                        <SelectValue placeholder="Select Preset" />
-                                                    </SelectTrigger>
-                                                    <SelectContent>
-                                                        {aiVoicePresets.map(p => (
-                                                            <SelectItem key={p} value={p}>{p}</SelectItem>
-                                                        ))}
-                                                    </SelectContent>
-                                                </Select>
+
+                                            {synthProvider === 'aivoice' ? (
+                                                <div className="space-y-3">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Preset</Label>
+                                                        <Select value={selectedAiVoicePreset} onValueChange={setSelectedAiVoicePreset}>
+                                                            <SelectTrigger className="h-8 text-xs bg-background">
+                                                                <SelectValue placeholder="Select preset" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {aiVoicePresets.map(p => (
+                                                                    <SelectItem key={p} value={p} className="text-xs">{p}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Server URL</Label>
+                                                        <Input
+                                                            value={aivoiceBaseUrl}
+                                                            onChange={e => setAivoiceBaseUrl(e.target.value)}
+                                                            className="h-8 text-xs bg-background font-mono"
+                                                            placeholder="http://localhost:8000"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : (
+                                                <div className="space-y-3">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Speaker</Label>
+                                                        <Select value={selectedVoicevoxSpeaker} onValueChange={setSelectedVoicevoxSpeaker}>
+                                                            <SelectTrigger className="h-8 text-xs bg-background">
+                                                                <SelectValue placeholder="Select speaker" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {voicevoxSpeakers.map(s => (
+                                                                    <SelectItem key={s.speaker_uuid} value={s.speaker_uuid} className="text-xs">{s.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Style</Label>
+                                                        <Select
+                                                            value={selectedVoicevoxStyle.toString()}
+                                                            onValueChange={(val) => setSelectedVoicevoxStyle(parseInt(val))}
+                                                        >
+                                                            <SelectTrigger className="h-8 text-xs bg-background">
+                                                                <SelectValue placeholder="Select style" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {voicevoxSpeakers.find(s => s.speaker_uuid === selectedVoicevoxSpeaker)?.styles.map(st => (
+                                                                    <SelectItem key={st.id} value={st.id.toString()} className="text-xs">{st.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Server URL</Label>
+                                                        <Input
+                                                            value={voicevoxBaseUrl}
+                                                            onChange={e => setVoicevoxBaseUrl(e.target.value)}
+                                                            className="h-8 text-xs bg-background font-mono"
+                                                            placeholder="http://localhost:50021"
+                                                        />
+                                                    </div>
+                                                </div>
                                             )}
-                                            {!aiVoicePresets.length && (
-                                                <p className="text-[10px] text-muted-foreground italic">AIVOICE Server not detected.</p>
-                                            )}
+
+                                            <Button
+                                                size="sm"
+                                                disabled={isSynthesizing || (synthProvider === 'aivoice' ? !aiVoicePresets.length : !voicevoxSpeakers.length)}
+                                                className="w-full h-8 text-[10px] gap-2 mt-2"
+                                                onClick={async () => {
+                                                    try {
+                                                        setIsSynthesizing(true);
+                                                        if (synthProvider === 'aivoice') {
+                                                            const result = await synthesizeVoice(aivoiceBaseUrl, selectedClip.content, selectedAiVoicePreset);
+                                                            if (result) {
+                                                                const audioDuration = result.duration || 2;
+                                                                handleUpdateClip('durationInFrames', Math.ceil(audioDuration * 30));
+                                                                addClip('audio', result.url, audioDuration);
+                                                            } else {
+                                                                alert('AIVOICE Synthesis failed. Is the server running?');
+                                                            }
+                                                        } else {
+                                                            const result = await synthesizeVoicevox(voicevoxBaseUrl, selectedClip.content, selectedVoicevoxStyle);
+                                                            if (result) {
+                                                                // Use HTMLAudioElement to get duration for VOICEVOX blob
+                                                                const audio = new Audio(result.url);
+                                                                audio.onloadedmetadata = () => {
+                                                                    const duration = audio.duration || 3;
+                                                                    handleUpdateClip('durationInFrames', Math.ceil(duration * 30));
+                                                                    addClip('audio', result.url, duration);
+                                                                };
+                                                            } else {
+                                                                alert('VOICEVOX Synthesis failed. Is the server running?');
+                                                            }
+                                                        }
+                                                    } catch (err) {
+                                                        console.error(err);
+                                                        alert('Synthesis error');
+                                                    } finally {
+                                                        setIsSynthesizing(false);
+                                                    }
+                                                }}
+                                            >
+                                                {isSynthesizing ? <Loader2 className="animate-spin" size={14} /> : <Wand2 size={14} />}
+                                                {t('editor.properties.generateVoice')}
+                                            </Button>
                                         </div>
                                     </div>
                                 ) : (

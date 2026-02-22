@@ -17,6 +17,7 @@ import {
 } from 'lucide-react';
 import { readPsd } from 'ag-psd';
 import { getAIVoicePresets } from '@/lib/aivoice';
+import { getVoicevoxSpeakers, VoicevoxSpeaker } from '@/lib/voicevox';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssetsPanel } from './AssetsPanel';
 import { AiGeneratorDialog } from './AiGeneratorDialog';
@@ -48,6 +49,11 @@ export default function Editor() {
                 if (parsed.primaryColor) setPrimaryColor(parsed.primaryColor);
                 if (parsed.assets) setAssets(parsed.assets);
                 if (parsed.assetFolders) setAssetFolders(parsed.assetFolders);
+                if (parsed.synthProvider) setSynthProvider(parsed.synthProvider);
+                if (parsed.aivoiceBaseUrl) setAivoiceBaseUrl(parsed.aivoiceBaseUrl);
+                if (parsed.voicevoxBaseUrl) setVoicevoxBaseUrl(parsed.voicevoxBaseUrl);
+                if (parsed.selectedVoicevoxSpeaker) setSelectedVoicevoxSpeaker(parsed.selectedVoicevoxSpeaker);
+                if (parsed.selectedVoicevoxStyle !== undefined) setSelectedVoicevoxStyle(parsed.selectedVoicevoxStyle);
             } catch (e) {
                 console.error('Failed to load saved state', e);
             }
@@ -65,6 +71,32 @@ export default function Editor() {
     const [assetFolders, setAssetFolders] = useState<AssetFolder[]>([]);
     const [isUploading, setIsUploading] = useState(false);
 
+    const [localVolume, setLocalVolume] = useState<number | null>(null);
+    const [availableLayers, setAvailableLayers] = useState<string[]>([]);
+    const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
+    const [pathsWithChildren, setPathsWithChildren] = useState<Set<string>>(new Set());
+    const [tachiePresets, setTachiePresets] = useState<{ id: string; name: string; assetUrl: string; layers: string[] }[]>([]);
+    const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
+    const [selectedAiVoicePreset, setSelectedAiVoicePreset] = useState<string>('');
+
+    // Synth Settings
+    const [synthProvider, setSynthProvider] = useState<'aivoice' | 'voicevox'>('aivoice');
+    const [aivoiceBaseUrl, setAivoiceBaseUrl] = useState('http://localhost:8000');
+    const [voicevoxBaseUrl, setVoicevoxBaseUrl] = useState('http://localhost:50021');
+    const [voicevoxSpeakers, setVoicevoxSpeakers] = useState<VoicevoxSpeaker[]>([]);
+    const [selectedVoicevoxSpeaker, setSelectedVoicevoxSpeaker] = useState<string>('');
+    const [selectedVoicevoxStyle, setSelectedVoicevoxStyle] = useState<number>(0);
+
+    const [isSynthesizing, setIsSynthesizing] = useState(false);
+    const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
+    const [language, setLanguage] = useState(() => i18n.resolvedLanguage || 'en');
+    const [isAiOpen, setIsAiOpen] = useState(false);
+
+    const currentFrameRef = useRef(0);
+    const mainPlayerRef = useRef<PlayerRef | null>(null);
+    const wasFullscreenRef = useRef(false);
+
+
     // Save editor state to localStorage
     useEffect(() => {
         if (!isLoaded) return;
@@ -73,9 +105,14 @@ export default function Editor() {
             clips,
             primaryColor,
             assets,
-            assetFolders
+            assetFolders,
+            synthProvider,
+            aivoiceBaseUrl,
+            voicevoxBaseUrl,
+            selectedVoicevoxSpeaker,
+            selectedVoicevoxStyle
         }));
-    }, [tracks, clips, primaryColor, assets, assetFolders, isLoaded]);
+    }, [tracks, clips, primaryColor, assets, assetFolders, isLoaded, synthProvider, aivoiceBaseUrl, voicevoxBaseUrl, selectedVoicevoxSpeaker, selectedVoicevoxStyle]);
 
     const handleCreateFolder = (name: string, parentId?: string) => {
         const newFolder: AssetFolder = {
@@ -92,19 +129,12 @@ export default function Editor() {
 
     const handleDeleteFolder = (id: string) => {
         setAssetFolders(prev => {
-            const children = prev.filter(f => f.parentId === id);
-            // Move children folders up to current folder's parent
             const folderToDelete = prev.find(f => f.id === id);
             const parentOfDeleted = folderToDelete?.parentId;
-
             return prev.filter(f => f.id !== id).map(f =>
                 f.parentId === id ? { ...f, parentId: parentOfDeleted } : f
             );
         });
-
-        // Move assets to root or parent? 
-        // VS Code style: keep them in the tree if possible?
-        // Simple way: move assets to root (or parent)
         setAssets(prev => {
             const folderToDelete = assetFolders.find(f => f.id === id);
             return prev.map(a => a.folderId === id ? { ...a, folderId: folderToDelete?.parentId } : a);
@@ -121,7 +151,6 @@ export default function Editor() {
 
     const handleMoveFolderToFolder = (sourceId: string, targetId?: string) => {
         if (sourceId === targetId) return;
-        // Prevent cyclic move
         const isDescendant = (parent: string, child: string): boolean => {
             const folder = assetFolders.find(f => f.id === child);
             if (!folder || !folder.parentId) return false;
@@ -129,23 +158,10 @@ export default function Editor() {
             return isDescendant(parent, folder.parentId);
         };
         if (targetId && isDescendant(sourceId, targetId)) return;
-
         setAssetFolders(prev => prev.map(f => f.id === sourceId ? { ...f, parentId: targetId } : f));
     };
 
-    const currentFrameRef = useRef(0); // for addClip etc - synced from store
-    const [localVolume, setLocalVolume] = useState<number | null>(null);
-    const [availableLayers, setAvailableLayers] = useState<string[]>([]);
-    const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
-    const [pathsWithChildren, setPathsWithChildren] = useState<Set<string>>(new Set());
-    const [tachiePresets, setTachiePresets] = useState<{ id: string; name: string; assetUrl: string; layers: string[] }[]>([]);
-    const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
-    const [selectedAiVoicePreset, setSelectedAiVoicePreset] = useState<string>('');
-    const [isSynthesizing, setIsSynthesizing] = useState(false);
-    const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
-    const mainPlayerRef = React.useRef<PlayerRef | null>(null);
-    const wasFullscreenRef = React.useRef(false);
-    const [language, setLanguage] = useState(() => i18n.resolvedLanguage || 'en');
+
 
     const handleLanguageChange = (val: string) => {
         setLanguage(val);
@@ -176,13 +192,35 @@ export default function Editor() {
         localStorage.setItem('omoti_tachie_presets', JSON.stringify(tachiePresets));
     }, [tachiePresets]);
 
-    // Fetch AIVOICE presets
+    // Fetch Synth Presets/Speakers with debounce
     useEffect(() => {
-        getAIVoicePresets().then(presets => {
-            setAiVoicePresets(presets);
-            if (presets.length > 0) setSelectedAiVoicePreset(presets[0]);
-        });
-    }, []);
+        const timer = setTimeout(() => {
+            if (synthProvider === 'aivoice') {
+                if (!aivoiceBaseUrl) return;
+                setAiVoicePresets([]); // Clear current
+                getAIVoicePresets(aivoiceBaseUrl).then(presets => {
+                    setAiVoicePresets(presets);
+                    if (presets.length > 0 && !selectedAiVoicePreset) setSelectedAiVoicePreset(presets[0]);
+                });
+            } else {
+                if (!voicevoxBaseUrl) return;
+                setVoicevoxSpeakers([]); // Clear current
+                getVoicevoxSpeakers(voicevoxBaseUrl).then(speakers => {
+                    setVoicevoxSpeakers(speakers);
+                    if (speakers.length > 0) {
+                        // Keep current if still exists, otherwise reset
+                        const exists = speakers.some(s => s.speaker_uuid === selectedVoicevoxSpeaker);
+                        if (!exists) {
+                            setSelectedVoicevoxSpeaker(speakers[0].speaker_uuid);
+                            if (speakers[0].styles.length > 0) setSelectedVoicevoxStyle(speakers[0].styles[0].id);
+                        }
+                    }
+                });
+            }
+        }, 500); // 500ms debounce
+
+        return () => clearTimeout(timer);
+    }, [synthProvider, aivoiceBaseUrl, voicevoxBaseUrl, selectedVoicevoxSpeaker, selectedAiVoicePreset]);
 
     // Exit fullscreen on Escape
     useEffect(() => {
@@ -423,28 +461,51 @@ export default function Editor() {
     }, [player]);
 
     const handleUpdateClip = useCallback((key: keyof Clip, value: any) => {
-        if (!selectedClipId) return;
-        setClips(clips.map(c => c.id === selectedClipId ? { ...c, [key]: value } : c));
-    }, [selectedClipId, clips]);
+        setSelectedClipId(currentId => {
+            if (!currentId) return currentId;
+            setClips(prev => prev.map(c => c.id === currentId ? { ...c, [key]: value } : c));
+            return currentId;
+        });
+    }, []);
 
     const handleBatchUpdateClip = useCallback((updates: Partial<Clip>) => {
-        if (!selectedClipId) return;
-        setClips(clips.map(c => c.id === selectedClipId ? { ...c, ...updates } : c));
-    }, [selectedClipId, clips]);
+        setSelectedClipId(currentId => {
+            if (!currentId) return currentId;
+            setClips(prev => prev.map(c => c.id === currentId ? { ...c, ...updates } : c));
+            return currentId;
+        });
+    }, []);
 
     const handleUpdateStyle = useCallback((key: string, value: any) => {
-        if (!selectedClip) return;
-        const newStyle = { ...selectedClip.style, [key]: value };
-        handleUpdateClip('style', newStyle);
-    }, [selectedClip, handleUpdateClip]);
+        setSelectedClipId(currentId => {
+            if (!currentId) return currentId;
+            setClips(prev => prev.map(c => {
+                if (c.id === currentId) {
+                    return { ...c, style: { ...c.style, [key]: value } };
+                }
+                return c;
+            }));
+            return currentId;
+        });
+    }, []);
 
     const handleUpdateAnimation = useCallback((key: string, value: any) => {
-        if (!selectedClip) return;
-        const newAnimation = { ...selectedClip.animation, [key]: value };
-        if (!selectedClip.animation && !newAnimation.duration) newAnimation.duration = 10;
-        if (!selectedClip.animation && !newAnimation.type) newAnimation.type = 'fade';
-        handleUpdateClip('animation', newAnimation);
-    }, [selectedClip, handleUpdateClip]);
+        setSelectedClipId(currentId => {
+            if (!currentId) return currentId;
+            setClips(prev => prev.map(c => {
+                if (c.id === currentId) {
+                    const currentAnim = c.animation || { type: 'none', duration: 0 };
+                    const newAnimation = {
+                        ...currentAnim,
+                        [key]: value
+                    } as any;
+                    return { ...c, animation: newAnimation };
+                }
+                return c;
+            }));
+            return currentId;
+        });
+    }, []);
 
     const checkCollision = (id: string, start: number, duration: number, track: number) => {
         const end = start + duration;
@@ -573,9 +634,9 @@ export default function Editor() {
                 { id: 'e1-2', source: '1', target: '2' },
             ] : undefined,
         };
-        setClips([...clips, newClip]);
+        setClips(prev => [...prev, newClip]);
         setSelectedClipId(newClip.id);
-    }, [clips, tracks]);
+    }, [tracks]);
 
     const handleTimelineDrop = useCallback(async (e: React.DragEvent, trackId: number, frame: number) => {
         try {
@@ -646,10 +707,12 @@ export default function Editor() {
     }, [addClip, getMediaDuration]);
 
     const removeClip = useCallback(() => {
-        if (!selectedClipId) return;
-        setClips(clips.filter(c => c.id !== selectedClipId));
-        setSelectedClipId(null);
-    }, [selectedClipId, clips]);
+        setSelectedClipId(currentId => {
+            if (!currentId) return null;
+            setClips(prev => prev.filter(c => c.id !== currentId));
+            return null;
+        });
+    }, []);
 
     const handleSeek = useCallback((frame: number) => {
         setEditorFrame(frame);
@@ -679,7 +742,7 @@ export default function Editor() {
             return;
         }
 
-        setClips(clips.map(c => {
+        setClips(prev => prev.map(c => {
             if (c.id === clipId) {
                 return {
                     ...c,
@@ -703,7 +766,7 @@ export default function Editor() {
             return;
         }
 
-        setClips(clips.map(c => (c.id === clipId ? { ...c, startFrame: start, durationInFrames: duration } : c)));
+        setClips(prev => prev.map(c => (c.id === clipId ? { ...c, startFrame: start, durationInFrames: duration } : c)));
     };
 
     // ------------- Undo / Redo History -------------
@@ -845,8 +908,8 @@ export default function Editor() {
 
     const handleRemoveTrack = (id: number) => {
         if (confirm('Are you sure you want to delete this track? All clips on it will be removed.')) {
-            setTracks(tracks.filter(t => t.id !== id));
-            setClips(clips.filter(c => c.trackId !== id));
+            setTracks(prev => prev.filter(t => t.id !== id));
+            setClips(prev => prev.filter(c => c.trackId !== id));
         }
     };
 
@@ -886,13 +949,14 @@ export default function Editor() {
         };
 
         // Update first clip
-        const updatedClips = clips.map(c =>
-            c.id === clipId
-                ? { ...c, durationInFrames: firstPartDuration, title: `${clip.title} (Part 1)` }
-                : c
-        );
-
-        setClips([...updatedClips, newClip]);
+        setClips(prev => {
+            const updated = prev.map(c =>
+                c.id === clipId
+                    ? { ...c, durationInFrames: firstPartDuration, title: `${clip.title} (Part 1)` }
+                    : c
+            );
+            return [...updated, newClip];
+        });
         setSelectedClipId(newClip.id);
     };
 
@@ -922,7 +986,7 @@ export default function Editor() {
         }
         newClip.startFrame = start;
 
-        setClips([...clips, newClip]);
+        setClips(prev => [...prev, newClip]);
     };
 
     const handleSaveProject = () => {
@@ -1007,8 +1071,6 @@ export default function Editor() {
             setIsExporting(false);
         }
     };
-
-    const [isAiOpen, setIsAiOpen] = useState(false);
 
     const handleAiGenerate = (newClips: Clip[]) => {
         if (confirm("This will replace your current timeline. Continue?")) {
@@ -1161,6 +1223,17 @@ export default function Editor() {
                                     aiVoicePresets={aiVoicePresets}
                                     selectedAiVoicePreset={selectedAiVoicePreset}
                                     setSelectedAiVoicePreset={setSelectedAiVoicePreset}
+                                    synthProvider={synthProvider}
+                                    setSynthProvider={setSynthProvider}
+                                    aivoiceBaseUrl={aivoiceBaseUrl}
+                                    setAivoiceBaseUrl={setAivoiceBaseUrl}
+                                    voicevoxBaseUrl={voicevoxBaseUrl}
+                                    setVoicevoxBaseUrl={setVoicevoxBaseUrl}
+                                    voicevoxSpeakers={voicevoxSpeakers}
+                                    selectedVoicevoxSpeaker={selectedVoicevoxSpeaker}
+                                    setSelectedVoicevoxSpeaker={setSelectedVoicevoxSpeaker}
+                                    selectedVoicevoxStyle={selectedVoicevoxStyle}
+                                    setSelectedVoicevoxStyle={setSelectedVoicevoxStyle}
                                     isSynthesizing={isSynthesizing}
                                     setIsSynthesizing={setIsSynthesizing}
                                     primaryColor={primaryColor}
@@ -1381,7 +1454,7 @@ export default function Editor() {
                                 size="sm"
                                 className="justify-start h-8 px-2 text-destructive hover:text-destructive"
                                 onClick={() => {
-                                    setClips(clips.filter(c => c.id !== contextMenu.clipId));
+                                    setClips(prev => prev.filter(c => c.id !== contextMenu.clipId));
                                     setContextMenu(null);
                                 }}
                             >
