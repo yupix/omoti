@@ -184,6 +184,10 @@ export default function Editor() {
         }
     }, [getMediaDuration, setAssets, setActiveTab]);
 
+    const removeAsset = useCallback((url: string) => {
+        setAssets(prev => prev.filter(a => a.url !== url));
+    }, []);
+
     const handleFileUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
         const files = Array.from(e.target.files || []);
         if (files.length === 0) return;
@@ -845,6 +849,7 @@ export default function Editor() {
                                 isUploading={isUploading}
                                 assets={assets}
                                 addClip={addClip}
+                                removeAsset={removeAsset}
                                 t={t}
                             />
                         )}

@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Loader2, Upload, Volume2, Layers, Plus, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Loader2, Upload, Volume2, Layers, Plus, Image as ImageIcon, Trash2 } from 'lucide-react';
 import { Asset } from './utils';
 import { ClipboardEvent } from 'react';
 import { ClipType } from '@/types';
@@ -11,6 +11,7 @@ interface AssetsPanelProps {
     isUploading: boolean;
     assets: Asset[];
     addClip: (type: ClipType, contentOverride?: string, durationOverride?: number) => void;
+    removeAsset: (url: string) => void;
     t: TFunction;
 }
 
@@ -20,9 +21,18 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     isUploading,
     assets,
     addClip,
+    removeAsset,
     t
 }) => {
     const [isDragActive, setIsDragActive] = useState(false);
+    const [contextMenu, setContextMenu] = useState<{ x: number; y: number; url: string } | null>(null);
+
+    // Close context menu on click anywhere
+    useEffect(() => {
+        const handleClick = () => setContextMenu(null);
+        window.addEventListener('click', handleClick);
+        return () => window.removeEventListener('click', handleClick);
+    }, []);
 
     return (
         <div className="space-y-4 animate-in slide-in-from-right duration-300">
@@ -87,6 +97,11 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                                 }}
                                 className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all cursor-grab active:cursor-grabbing"
                                 onClick={() => addClip(asset.type, asset.url, asset.duration)}
+                                onContextMenu={(e) => {
+                                    e.preventDefault();
+                                    e.stopPropagation();
+                                    setContextMenu({ x: e.clientX, y: e.clientY, url: asset.url });
+                                }}
                                 title={`${asset.name} ${asset.duration ? `(${asset.duration.toFixed(1)}s)` : ''}`}
                             >
                                 {asset.type === 'video' ? (
@@ -114,6 +129,26 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                     </div>
                 )}
             </div>
+
+            {/* Context Menu */}
+            {contextMenu && (
+                <div
+                    className="fixed z-50 min-w-[160px] bg-card border border-border shadow-xl rounded-md p-1"
+                    style={{ left: contextMenu.x, top: contextMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground text-destructive flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            removeAsset(contextMenu.url);
+                            setContextMenu(null);
+                        }}
+                    >
+                        <Trash2 size={14} />
+                        Delete
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
