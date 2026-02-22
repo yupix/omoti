@@ -33,6 +33,33 @@ export default function Editor() {
     const [tracks, setTracks] = useState<Track[]>(INITIAL_TRACKS); // Static tracks for now
     const [clips, setClips] = useState<Clip[]>(INITIAL_CLIPS);
     const [selectedClipId, setSelectedClipId] = useState<string | null>(null);
+    const [isLoaded, setIsLoaded] = useState(false);
+
+    // Load editor state from localStorage
+    useEffect(() => {
+        const saved = localStorage.getItem('omoti_editor_state');
+        if (saved) {
+            try {
+                const parsed = JSON.parse(saved);
+                if (parsed.tracks && parsed.tracks.length > 0) setTracks(parsed.tracks);
+                if (parsed.clips) setClips(parsed.clips);
+                if (parsed.primaryColor) setPrimaryColor(parsed.primaryColor);
+            } catch (e) {
+                console.error('Failed to load saved state', e);
+            }
+        }
+        setIsLoaded(true);
+    }, []);
+
+    // Save editor state to localStorage
+    useEffect(() => {
+        if (!isLoaded) return;
+        localStorage.setItem('omoti_editor_state', JSON.stringify({
+            tracks,
+            clips,
+            primaryColor
+        }));
+    }, [tracks, clips, primaryColor, isLoaded]);
 
     const currentFrameRef = useRef(0); // for addClip etc - synced from store
     const [isPlaying, setIsPlaying] = useState(false);
@@ -534,6 +561,64 @@ export default function Editor() {
         setClips(clips.map(c => (c.id === clipId ? { ...c, startFrame: start, durationInFrames: duration } : c)));
     };
 
+    // ------------- Undo / Redo History -------------
+    const historyRef = useRef<{ clips: Clip[]; tracks: Track[]; primaryColor: string }[]>([]);
+    const historyIndexRef = useRef(-1);
+    const isNavigatingHistoryRef = useRef(false);
+
+    // Save history whenever state changes (unless we are undoing/redoing)
+    useEffect(() => {
+        if (!isLoaded) return;
+        if (isNavigatingHistoryRef.current) {
+            isNavigatingHistoryRef.current = false;
+            return;
+        }
+
+        const currentState = { clips, tracks, primaryColor };
+
+        // Prevent pushing duplicate states sequentially
+        const lastState = historyRef.current[historyIndexRef.current];
+        if (lastState && JSON.stringify(lastState) === JSON.stringify(currentState)) {
+            return;
+        }
+
+        // If we are not at the end of the history (i.e. we undid something), truncate future history
+        if (historyIndexRef.current < historyRef.current.length - 1) {
+            historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
+        }
+
+        historyRef.current.push(currentState);
+
+        // Limit history to 50 items to prevent huge memory usage in localStorage/RAM
+        if (historyRef.current.length > 50) {
+            historyRef.current.shift();
+        } else {
+            historyIndexRef.current++;
+        }
+    }, [clips, tracks, primaryColor, isLoaded]);
+
+    const handleUndo = useCallback(() => {
+        if (historyIndexRef.current > 0) {
+            isNavigatingHistoryRef.current = true;
+            historyIndexRef.current--;
+            const previousState = historyRef.current[historyIndexRef.current];
+            setClips(previousState.clips);
+            setTracks(previousState.tracks);
+            setPrimaryColor(previousState.primaryColor);
+        }
+    }, []);
+
+    const handleRedo = useCallback(() => {
+        if (historyIndexRef.current < historyRef.current.length - 1) {
+            isNavigatingHistoryRef.current = true;
+            historyIndexRef.current++;
+            const nextState = historyRef.current[historyIndexRef.current];
+            setClips(nextState.clips);
+            setTracks(nextState.tracks);
+            setPrimaryColor(nextState.primaryColor);
+        }
+    }, []);
+
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; clipId: string } | null>(null);
 
     // Keyboard Shortcuts
@@ -543,6 +628,21 @@ export default function Editor() {
             const activeTag = document.activeElement?.tagName;
             const isContentEditable = (document.activeElement as HTMLElement)?.isContentEditable;
             if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || isContentEditable) {
+                return;
+            }
+
+            // Undo (Ctrl+Z or Cmd+Z)
+            if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && !e.shiftKey) {
+                e.preventDefault();
+                handleUndo();
+                return;
+            }
+
+            // Redo (Ctrl+Shift+Z, Cmd+Shift+Z, Ctrl+Y, Cmd+Y)
+            if (((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'z' && e.shiftKey) ||
+                ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'y')) {
+                e.preventDefault();
+                handleRedo();
                 return;
             }
 
@@ -575,7 +675,7 @@ export default function Editor() {
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedClipId, handleSeek, totalFrames]);
+    }, [selectedClipId, handleSeek, totalFrames, handleUndo, handleRedo]);
 
     // Close context menu on click
     useEffect(() => {
