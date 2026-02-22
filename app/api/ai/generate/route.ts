@@ -66,12 +66,16 @@ export async function POST(req: NextRequest) {
             7. Identify base layers (Body, Hair, Clothes) and expression layers.
             8. Each SCENE must specify which "character" is speaking.
             9. Tailor the dialogue and emotions based on the Role/Personality provided for each character.
-            10. IMPORTANT: If LAYER RULES are provided, they are ABSOLUTE. For Exclusive Groups, you MUST choose exactly one layer path that starts with that folder path for EVERY set you define.
+            10. IMPORTANT: If LAYER RULES are provided, they are ABSOLUTE. For Exclusive Groups, you MUST choose exactly one leaf-layer path that starts with that folder path for EVERY set you define. 
+            11. HIERARCHY RULE: If a parent folder is an Exclusive Group, pick ONLY ONE leaf from its entire sub-directory. Ignore any further selection rules within that sub-directory; the parent group's selection covers the entire tree below it.
             `;
         }
 
-        const systemInstruction = `You are a video script generator for a tech tutorial or commentary channel.
-            Generate a JSON structure for a comprehensive video.
+        const systemInstruction = `You are a versatile video script generator.
+            Your goal is to faithfully convert the User Request into a high-quality video script while strictly following the requested tone, style, and content.
+            DO NOT force a "tech tutorial" or "engineer" style unless the user explicitly requests it.
+            Respect the vocabulary, character roles, and atmosphere provided in the user's prompt.
+
             The output must strictly follow this JSON schema:
             {
               "title": "Video Title",
@@ -85,14 +89,14 @@ export async function POST(req: NextRequest) {
               },
               "scenes": [
                 {
-                  "text": "Detailed spoken dialogue line. Aim for 30-50 words per scene to ensure thorough explanation.",
+                  "text": "The dialogue line. Match the user's intended tone exactly.",
                   "character": "CharacterName",
                   "emotion": "neutral" | "happy" | "sad" | "surprised" | "serious",
                   "action": "intro" | "explain" | "code" | "summary" | "outro",
                   "codeBlocks": [
                     { "code": "code snippet", "fileName": "App.tsx", "language": "tsx" }
                   ],
-                  "previewContent": "HTML content for demo",
+                  "previewContent": "HTML content for demo (if relevant)",
                   "previewLayout": "split" | "overlay",
                   "visualDescription": "Brief description",
                   "position": "left" | "right" | "center",
@@ -103,16 +107,15 @@ export async function POST(req: NextRequest) {
               ]
             }
             ${characterContext}
-            Total scenes: exactly 15 scenes (or between 12 and 20 if needed for flow).
-            Language: Japanese (unless requested otherwise).
-            Tone: Informative, engaging, and detailed.
-            Provide deep explanations rather than just surface-level summaries.
-            
+            Total scenes: Generate an appropriate number of scenes (usually 5 to 15) to cover the prompt content naturally. DO NOT pad with unnecessary filler.
+            Language: Use the same language as the User Request (default to Japanese).
+            Tone: STRICTLY FOLLOW the tone of the User Request.
+
             EFFECTS GUIDE:
-            - Use "glow" to emphasize a character or code block.
-            - Use "outline" with high contrast for text or dark characters.
+            - Use "glow" to emphasize a character or important element.
+            - Use "outline" for visibility.
             - Use "shadow" for depth.
-            - Feel free to apply multiple effects to make the video look premium.
+            - Apply effects sparingly to enhance the atmosphere requested by the user.
 
             IMPORTANT: Return ONLY valid JSON.`;
 

@@ -465,6 +465,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                                 .map(l => l.split('/').slice(0, depth + 2).join('/'))
                                             ));
 
+                                            const isUnderGroup = data.rules?.exclusive.some(g => (path + '/').startsWith(g.path + '/'));
+
                                             return (
                                                 <div className="ml-4 border-l border-primary/10 pl-2 mt-1 space-y-1">
                                                     {subFolders.map(sf => {
@@ -475,11 +477,13 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                                                     <span className="text-[10px] text-muted-foreground flex items-center gap-1">
                                                                         <Folder size={10} className="text-blue-400" /> {name}
                                                                     </span>
-                                                                    <div className="flex gap-1">
-                                                                        <button onClick={() => toggleRule(data.id, 'mandatory', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(sf) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
-                                                                        <button onClick={() => toggleRule(data.id, 'exclusive', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.exclusive.some(g => g.path === sf) ? 'bg-purple-500/20 border-purple-500/50 text-purple-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Group</button>
-                                                                        <button onClick={() => toggleRule(data.id, 'optional', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(sf) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
-                                                                    </div>
+                                                                    {!isUnderGroup && (
+                                                                        <div className="flex gap-1">
+                                                                            <button onClick={() => toggleRule(data.id, 'mandatory', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(sf) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
+                                                                            <button onClick={() => toggleRule(data.id, 'exclusive', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.exclusive.some(g => g.path === sf) ? 'bg-purple-500/20 border-purple-500/50 text-purple-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Group</button>
+                                                                            <button onClick={() => toggleRule(data.id, 'optional', sf)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(sf) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
+                                                                        </div>
+                                                                    )}
                                                                 </div>
                                                                 {depth < 3 && renderLevel(sf, depth + 1)}
                                                             </div>
@@ -492,10 +496,12 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                                                 <span className="text-[9px] text-muted-foreground/80 flex items-center gap-1">
                                                                     <AlertCircle size={8} className="text-gray-400" /> {name}
                                                                 </span>
-                                                                <div className="flex gap-1">
-                                                                    <button onClick={() => toggleRule(data.id, 'mandatory', c)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(c) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
-                                                                    <button onClick={() => toggleRule(data.id, 'optional', c)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(c) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
-                                                                </div>
+                                                                {!isUnderGroup && (
+                                                                    <div className="flex gap-1">
+                                                                        <button onClick={() => toggleRule(data.id, 'mandatory', c)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.mandatory.includes(c) ? 'bg-green-500/20 border-green-500/50 text-green-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Base</button>
+                                                                        <button onClick={() => toggleRule(data.id, 'optional', c)} className={`px-1.5 py-0.5 rounded text-[8px] border transition-all ${data.rules?.optional?.includes(c) ? 'bg-amber-500/20 border-amber-500/50 text-amber-600' : 'bg-transparent border-transparent text-muted-foreground hover:border-input'}`}>Extra</button>
+                                                                    </div>
+                                                                )}
                                                             </div>
                                                         );
                                                     })}
