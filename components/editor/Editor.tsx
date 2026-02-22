@@ -489,16 +489,66 @@ export default function Editor() {
         setSelectedClipId(newClip.id);
     }, [clips, tracks]);
 
-    const handleTimelineDrop = (e: React.DragEvent, trackId: number, frame: number) => {
+    const handleTimelineDrop = useCallback(async (e: React.DragEvent, trackId: number, frame: number) => {
         try {
-            const data = JSON.parse(e.dataTransfer.getData('application/omoti-clip'));
-            if (data) {
+            // Check if OMoti internal clip drag
+            const dataStr = e.dataTransfer.getData('application/omoti-clip');
+            if (dataStr) {
+                const data = JSON.parse(dataStr);
                 addClip(data.type, data.content, data.duration, frame, trackId);
+                return;
+            }
+
+            // Check if Native OS File Drag & Drop
+            if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const files = Array.from(e.dataTransfer.files);
+                // Call uploadFiles which handles the actual uploading
+                // It currently just adds to assets. We want to also drop them here.
+                // Since uploadFiles handles multiple and adds to state, we should ideally hook into it or replicate it.
+                // Refactoring: the cleanest way is to upload them, then add to timeline.
+                setIsUploading(true);
+                let currentFrameOffset = frame;
+
+                for (const file of files) {
+                    const formData = new FormData();
+                    formData.append('file', file);
+
+                    const res = await fetch('/api/upload', {
+                        method: 'POST',
+                        body: formData
+                    });
+
+                    if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
+                    const data = await res.json();
+
+                    const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
+                        data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
+                            data.name.match(/\.psd$/i) ? 'tachie' : 'image';
+
+                    const origin = window.location.origin;
+                    const fullUrl = `${origin}${data.url}`;
+
+                    let duration = 0;
+                    if (type === 'video' || type === 'audio') {
+                        duration = await getMediaDuration(fullUrl, type);
+                    }
+
+                    // 1. Add to global assets list quietly so it appears in the panel
+                    setAssets(prev => [...prev, { name: data.name, url: fullUrl, type, duration }]);
+
+                    // 2. Add to timeline
+                    addClip(type, fullUrl, duration, currentFrameOffset, trackId);
+
+                    // Sequential drop shift
+                    currentFrameOffset += (duration ? Math.ceil(duration * 30) : 60);
+                }
+                setIsUploading(false);
             }
         } catch (err) {
             console.error('Failed to parse drop data', err);
+            setIsUploading(false);
         }
-    };
+    }, [addClip, getMediaDuration]);
 
     const removeClip = useCallback(() => {
         if (!selectedClipId) return;
