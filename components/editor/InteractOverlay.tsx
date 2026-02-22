@@ -24,9 +24,9 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     const x = clip?.x ?? 0;
     const y = clip?.y ?? 0;
     const w = clip?.width ?? (clip?.x === undefined ?
-        (clip?.type === 'text' ? 800 : (clip?.type === 'image' || clip?.type === 'tachie') ? 600 : compWidth) : 400);
+        (clip?.type === 'text' ? 800 : (clip?.type === 'image' || clip?.type === 'tachie' || clip?.type === 'video') ? 600 : compWidth) : 400);
     const h = clip?.height ?? (clip?.x === undefined ?
-        (clip?.type === 'text' ? 200 : (clip?.type === 'image' || clip?.type === 'tachie') ? 600 : compHeight) : 400);
+        (clip?.type === 'text' ? 200 : (clip?.type === 'image' || clip?.type === 'tachie' || clip?.type === 'video') ? 600 : compHeight) : 400);
     const r = clip?.rotate ?? 0;
 
     const handleMouseDown = (e: React.MouseEvent, mode: 'move' | 'resize' | 'rotate') => {
@@ -206,7 +206,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     if (!clip) return null;
 
     // Only text, image, shape, code support positioning for now
-    if (!['text', 'image', 'shape', 'code', 'tachie', 'flow'].includes(clip.type)) return null;
+    if (!['text', 'image', 'shape', 'code', 'tachie', 'flow', 'video'].includes(clip.type)) return null;
 
     // Calculate percentage styles for the overlay box
     const style: React.CSSProperties = {

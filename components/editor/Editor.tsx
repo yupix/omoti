@@ -460,10 +460,10 @@ export default function Editor() {
             trackId,
             startFrame: start, // Place at valid spot
             durationInFrames: duration,
-            width: (type === 'text') ? 800 : (type === 'code' || type === 'flow') ? 600 : (type === 'image' || type === 'tachie') ? 600 : undefined,
-            height: (type === 'text') ? 200 : (type === 'code' || type === 'flow') ? 400 : (type === 'image' || type === 'tachie') ? 600 : undefined,
-            x: (type === 'text') ? 240 : (type === 'code' || type === 'flow') ? 340 : (type === 'image' || type === 'tachie') ? 340 : undefined,
-            y: (type === 'text') ? 500 : (type === 'code' || type === 'flow') ? 160 : (type === 'image' || type === 'tachie') ? 60 : undefined,
+            width: (type === 'text') ? 800 : (type === 'code' || type === 'flow') ? 600 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined,
+            height: (type === 'text') ? 200 : (type === 'code' || type === 'flow') ? 400 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined,
+            x: (type === 'text') ? 240 : (type === 'code' || type === 'flow') ? 340 : (type === 'image' || type === 'tachie' || type === 'video') ? 340 : undefined,
+            y: (type === 'text') ? 500 : (type === 'code' || type === 'flow') ? 160 : (type === 'image' || type === 'tachie' || type === 'video') ? 60 : undefined,
             content: contentOverride || (
                 type === 'text' ? 'New Text' :
                     type === 'audio' ? 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' :

@@ -66,7 +66,7 @@ export function PreviewClipOverlays({
                         currentFrame >= c.startFrame &&
                         currentFrame < c.startFrame + c.durationInFrames &&
                         c.id !== selectedClipId &&
-                        ['text', 'image', 'shape', 'code', 'tachie', 'flow'].includes(c.type)
+                        ['text', 'image', 'shape', 'code', 'tachie', 'flow', 'video'].includes(c.type)
                 )
                 .map((clip) => {
                     const isPositioned =
@@ -85,7 +85,7 @@ export function PreviewClipOverlays({
                     } else if (clip.type === 'text') {
                         width = 800;
                         height = 200;
-                    } else if (clip.type === 'image' || clip.type === 'tachie') {
+                    } else if (clip.type === 'image' || clip.type === 'tachie' || clip.type === 'video') {
                         width = 600;
                         height = 600;
                     }
