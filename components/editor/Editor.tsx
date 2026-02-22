@@ -23,7 +23,7 @@ import { AiGeneratorDialog } from './AiGeneratorDialog';
 import { Sparkles } from 'lucide-react';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
-import { Asset, getMediaDuration } from './utils';
+import { Asset, getMediaDuration, getMediaDimensions } from './utils';
 import { setFrame as setEditorFrame, getSnapshot as getEditorFrame } from './editorFrameStore';
 import { FrameDisplay, FullscreenFrameDisplay, FrameSeekBar, PreviewClipOverlays } from './EditorFrameComponents';
 
@@ -186,15 +186,24 @@ export default function Editor() {
                 const fullUrl = `${origin}${data.url}`;
 
                 let duration = 0;
+                let width: number | undefined;
+                let height: number | undefined;
                 if (type === 'video' || type === 'audio') {
                     duration = await getMediaDuration(fullUrl, type);
+                }
+                if (type === 'video' || type === 'image' || type === 'tachie') {
+                    const dims = await getMediaDimensions(fullUrl, type);
+                    width = dims.width;
+                    height = dims.height;
                 }
 
                 newAssets.push({
                     name: data.name,
                     url: fullUrl,
                     type,
-                    duration
+                    duration,
+                    width,
+                    height
                 });
             }
 
@@ -382,7 +391,7 @@ export default function Editor() {
         );
     };
 
-    const addClip = useCallback((type: ClipType, contentOverride?: string, durationOverride?: number, startFrameOverride?: number, trackIdOverride?: number) => {
+    const addClip = useCallback((type: ClipType, contentOverride?: string, durationOverride?: number, startFrameOverride?: number, trackIdOverride?: number, widthOverride?: number, heightOverride?: number) => {
         const duration = durationOverride ? Math.ceil(durationOverride * 30) : 60;
         let start = startFrameOverride ?? currentFrameRef.current;
         let trackId = trackIdOverride ?? (type === 'text' || type === 'code' ? 1 : type === 'audio' ? 3 : 2);
@@ -454,16 +463,29 @@ export default function Editor() {
             }
         }
 
+        let finalW = widthOverride ?? ((type === 'text') ? 800 : (type === 'code' || type === 'flow') ? 600 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined);
+        let finalH = heightOverride ?? ((type === 'text') ? 200 : (type === 'code' || type === 'flow') ? 400 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined);
+
+        if (finalW !== undefined && finalH !== undefined && (type === 'image' || type === 'video' || type === 'tachie')) {
+            const FIT_W = 1200; // Leave some margin
+            const FIT_H = 650;
+            if (finalW > FIT_W || finalH > FIT_H) {
+                const ratio = Math.min(FIT_W / finalW, FIT_H / finalH);
+                finalW = Math.round(finalW * ratio);
+                finalH = Math.round(finalH * ratio);
+            }
+        }
+
         const newClip: Clip = {
             id: Math.random().toString(36).substr(2, 9),
             type,
             trackId,
             startFrame: start, // Place at valid spot
             durationInFrames: duration,
-            width: (type === 'text') ? 800 : (type === 'code' || type === 'flow') ? 600 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined,
-            height: (type === 'text') ? 200 : (type === 'code' || type === 'flow') ? 400 : (type === 'image' || type === 'tachie' || type === 'video') ? 600 : undefined,
-            x: (type === 'text') ? 240 : (type === 'code' || type === 'flow') ? 340 : (type === 'image' || type === 'tachie' || type === 'video') ? 340 : undefined,
-            y: (type === 'text') ? 500 : (type === 'code' || type === 'flow') ? 160 : (type === 'image' || type === 'tachie' || type === 'video') ? 60 : undefined,
+            width: finalW,
+            height: finalH,
+            x: (type === 'text') ? 240 : (type === 'code' || type === 'flow') ? 340 : (type === 'image' || type === 'tachie' || type === 'video') ? Math.max(0, (1280 - (finalW ?? 600)) / 2) : undefined,
+            y: (type === 'text') ? 500 : (type === 'code' || type === 'flow') ? 160 : (type === 'image' || type === 'tachie' || type === 'video') ? Math.max(0, (720 - (finalH ?? 600)) / 2) : undefined,
             content: contentOverride || (
                 type === 'text' ? 'New Text' :
                     type === 'audio' ? 'https://actions.google.com/sounds/v1/alarms/beep_short.ogg' :
@@ -495,7 +517,7 @@ export default function Editor() {
             const dataStr = e.dataTransfer.getData('application/omoti-clip');
             if (dataStr) {
                 const data = JSON.parse(dataStr);
-                addClip(data.type, data.content, data.duration, frame, trackId);
+                addClip(data.type, data.content, data.duration, frame, trackId, data.width, data.height);
                 return;
             }
 
@@ -529,15 +551,22 @@ export default function Editor() {
                     const fullUrl = `${origin}${data.url}`;
 
                     let duration = 0;
+                    let width: number | undefined;
+                    let height: number | undefined;
                     if (type === 'video' || type === 'audio') {
                         duration = await getMediaDuration(fullUrl, type);
                     }
+                    if (type === 'video' || type === 'image' || type === 'tachie') {
+                        const dims = await getMediaDimensions(fullUrl, type);
+                        width = dims.width;
+                        height = dims.height;
+                    }
 
                     // 1. Add to global assets list quietly so it appears in the panel
-                    setAssets(prev => [...prev, { name: data.name, url: fullUrl, type, duration }]);
+                    setAssets(prev => [...prev, { name: data.name, url: fullUrl, type, duration, width, height }]);
 
                     // 2. Add to timeline
-                    addClip(type, fullUrl, duration, currentFrameOffset, trackId);
+                    addClip(type, fullUrl, duration, currentFrameOffset, trackId, width, height);
 
                     // Sequential drop shift
                     currentFrameOffset += (duration ? Math.ceil(duration * 30) : 60);

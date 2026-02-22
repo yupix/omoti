@@ -10,7 +10,7 @@ interface AssetsPanelProps {
     uploadFiles: (files: File[]) => void;
     isUploading: boolean;
     assets: Asset[];
-    addClip: (type: ClipType, contentOverride?: string, durationOverride?: number) => void;
+    addClip: (type: ClipType, contentOverride?: string, durationOverride?: number, startFrame?: number, trackId?: number, width?: number, height?: number) => void;
     removeAsset: (url: string) => void;
     t: TFunction;
 }
@@ -92,11 +92,13 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                                     e.dataTransfer.setData('application/omoti-clip', JSON.stringify({
                                         type: asset.type,
                                         content: asset.url,
-                                        duration: asset.duration
+                                        duration: asset.duration,
+                                        width: asset.width,
+                                        height: asset.height
                                     }));
                                 }}
                                 className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all cursor-grab active:cursor-grabbing"
-                                onClick={() => addClip(asset.type, asset.url, asset.duration)}
+                                onClick={() => addClip(asset.type, asset.url, asset.duration, undefined, undefined, asset.width, asset.height)}
                                 onContextMenu={(e) => {
                                     e.preventDefault();
                                     e.stopPropagation();

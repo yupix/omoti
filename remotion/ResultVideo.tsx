@@ -153,6 +153,8 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
 
     // Base positioning style
     const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
+    const crop = clip.crop || { left: 0, top: 0, right: 0, bottom: 0 };
+
     const positionStyle: React.CSSProperties = {
         position: 'absolute',
         left: isPositioned ? clip.x : 0,
@@ -162,7 +164,26 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
         display: 'flex',
         justifyContent: 'center',
         alignItems: 'center',
+        overflow: 'hidden', // Required for OBS-style crop
         ...finalStyle,
+    };
+
+    const innerMediaStyle: React.CSSProperties = isPositioned ? {
+        position: 'absolute',
+        left: -crop.left,
+        top: -crop.top,
+        width: (clip.width || 400) + crop.left + crop.right,
+        height: (clip.height || 400) + crop.top + crop.bottom,
+        objectFit: 'cover' as const,
+        flexShrink: 0,
+        maxWidth: 'none',
+        maxHeight: 'none',
+        ...clip.style
+    } : {
+        width: '100%',
+        height: '100%',
+        objectFit: 'cover' as const,
+        ...clip.style
     };
 
     // Render text
@@ -249,12 +270,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                     startFrom={Math.round(clip.mediaStartOffset || 0)}
                     playbackRate={clip.playbackRate || 1}
                     volume={clip.volume ?? 1}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        ...clip.style
-                    }}
+                    style={innerMediaStyle}
                 />
             </div>
         );
@@ -274,11 +290,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                             src={gifSrc}
                             playbackRate={playbackRate}
                             fit="cover"
-                            style={{
-                                width: '100%',
-                                height: '100%',
-                                ...clip.style
-                            }}
+                            style={innerMediaStyle}
                         />
                     </Sequence>
                 </div>
@@ -290,12 +302,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
             <div style={positionStyle}>
                 <Img
                     src={imgSrc}
-                    style={{
-                        width: '100%',
-                        height: '100%',
-                        objectFit: 'cover',
-                        ...clip.style
-                    }}
+                    style={innerMediaStyle}
                 />
             </div>
         );
@@ -320,7 +327,9 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     if (clip.type === 'tachie') {
         return (
             <div style={positionStyle}>
-                <TachieRenderer clip={clip} assetBaseUrl={assetBaseUrl} />
+                <div style={{ ...innerMediaStyle, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
+                    <TachieRenderer clip={clip} assetBaseUrl={assetBaseUrl} />
+                </div>
             </div>
         );
     }

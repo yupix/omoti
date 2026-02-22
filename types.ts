@@ -19,6 +19,12 @@ export interface Clip {
     width?: number; // Width (pixels)
     height?: number; // Height (pixels)
     rotate?: number; // Rotation (degrees)
+    crop?: {
+        left: number;
+        top: number;
+        right: number;
+        bottom: number;
+    }; // OBS-style cropping
     language?: string; // Programming language for code clips
     steps?: CodeStep[]; // Keyframes for code content
     transitionDuration?: number; // Duration of code transition (frames)

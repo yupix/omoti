@@ -15,7 +15,8 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
     const [isResizing, setIsResizing] = useState(false);
     const [isRotating, setIsRotating] = useState(false);
     const [startPos, setStartPos] = useState({ x: 0, y: 0 });
-    const [initialClipState, setInitialClipState] = useState<{ x: number, y: number, w: number, h: number, r: number } | null>(null);
+    const [resizeDir, setResizeDir] = useState<string | null>(null);
+    const [initialClipState, setInitialClipState] = useState<{ x: number, y: number, w: number, h: number, r: number, crop: { left: number, top: number, right: number, bottom: number } } | null>(null);
     const [snapLines, setSnapLines] = useState<{ centerX: boolean, centerY: boolean, left: boolean, top: boolean, right: boolean, bottom: boolean }>({
         centerX: false, centerY: false, left: false, top: false, right: false, bottom: false
     });
@@ -29,17 +30,22 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
         (clip?.type === 'text' ? 200 : (clip?.type === 'image' || clip?.type === 'tachie' || clip?.type === 'video') ? 600 : compHeight) : 400);
     const r = clip?.rotate ?? 0;
 
-    const handleMouseDown = (e: React.MouseEvent, mode: 'move' | 'resize' | 'rotate') => {
+    const crop = clip?.crop ?? { left: 0, top: 0, right: 0, bottom: 0 };
+
+    const handleMouseDown = (e: React.MouseEvent, mode: 'move' | 'resize' | 'rotate', dir?: string) => {
         if (!clip) return; // Ensure clip exists before interaction
         e.preventDefault();
         e.stopPropagation();
 
         if (mode === 'move') setIsDragging(true);
-        if (mode === 'resize') setIsResizing(true);
+        if (mode === 'resize') {
+            setIsResizing(true);
+            setResizeDir(dir || 'se');
+        }
         if (mode === 'rotate') setIsRotating(true);
 
         setStartPos({ x: e.clientX, y: e.clientY });
-        setInitialClipState({ x, y, w, h, r });
+        setInitialClipState({ x, y, w, h, r, crop: { ...crop } });
     };
 
     useEffect(() => {
@@ -110,65 +116,89 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
                 onUpdate({ x: Math.round(finalX), y: Math.round(finalY), width: initialClipState.w, height: initialClipState.h });
             }
 
-            if (isResizing) {
+            if (isResizing && resizeDir) {
+                const isAlt = e.altKey;
                 const theta = initialClipState.r * (Math.PI / 180);
                 const cos = Math.cos(theta);
                 const sin = Math.sin(theta);
                 const localDx = dx * cos + dy * sin;
                 const localDy = -dx * sin + dy * cos;
-                let newW = Math.max(10, initialClipState.w + localDx);
-                let newH = Math.max(10, initialClipState.h + localDy);
 
-                const threshold = 15;
+                let newX = initialClipState.x;
+                let newY = initialClipState.y;
+                let newW = initialClipState.w;
+                let newH = initialClipState.h;
+                let newCrop = { ...initialClipState.crop };
+
+                const minSize = 10;
                 let snapRight = false;
                 let snapBottom = false;
-                let snapCenterX = false;
-                let snapCenterY = false;
 
-                // Snapping for resize (only if rotation is 0 for simplicity)
-                if (initialClipState.r === 0) {
-                    const currentRight = initialClipState.x + newW;
-                    if (Math.abs(currentRight - compWidth) < threshold) {
-                        newW = compWidth - initialClipState.x;
-                        snapRight = true;
-                    } else if (Math.abs(currentRight - compWidth / 2) < threshold) {
-                        newW = compWidth / 2 - initialClipState.x;
-                        snapCenterX = true;
+                if (resizeDir.includes('e')) {
+                    const deltaX = localDx;
+                    if (isAlt) {
+                        const safeDelta = Math.max(-initialClipState.w + 1, Math.min(deltaX, initialClipState.crop.right));
+                        newW = initialClipState.w + safeDelta;
+                        newCrop.right -= safeDelta;
+                    } else {
+                        newW = Math.max(minSize, initialClipState.w + deltaX);
                     }
-
-                    const currentBottom = initialClipState.y + newH;
-                    if (Math.abs(currentBottom - compHeight) < threshold) {
-                        newH = compHeight - initialClipState.y;
-                        snapBottom = true;
-                    } else if (Math.abs(currentBottom - compHeight / 2) < threshold) {
-                        newH = compHeight / 2 - initialClipState.y;
-                        snapCenterY = true;
+                }
+                if (resizeDir.includes('w')) {
+                    const deltaX = localDx;
+                    if (isAlt) {
+                        const safeDelta = Math.min(initialClipState.w - 1, Math.max(deltaX, -initialClipState.crop.left));
+                        newX = initialClipState.x + safeDelta;
+                        newW = initialClipState.w - safeDelta;
+                        newCrop.left += safeDelta;
+                    } else {
+                        const safeDelta = Math.min(initialClipState.w - minSize, deltaX);
+                        newX = initialClipState.x + safeDelta;
+                        newW = initialClipState.w - safeDelta;
+                    }
+                }
+                if (resizeDir.includes('s')) {
+                    const deltaY = localDy;
+                    if (isAlt) {
+                        const safeDelta = Math.max(-initialClipState.h + 1, Math.min(deltaY, initialClipState.crop.bottom));
+                        newH = initialClipState.h + safeDelta;
+                        newCrop.bottom -= safeDelta;
+                    } else {
+                        newH = Math.max(minSize, initialClipState.h + deltaY);
+                    }
+                }
+                if (resizeDir.includes('n')) {
+                    const deltaY = localDy;
+                    if (isAlt) {
+                        const safeDelta = Math.min(initialClipState.h - 1, Math.max(deltaY, -initialClipState.crop.top));
+                        newY = initialClipState.y + safeDelta;
+                        newH = initialClipState.h - safeDelta;
+                        newCrop.top += safeDelta;
+                    } else {
+                        const safeDelta = Math.min(initialClipState.h - minSize, deltaY);
+                        newY = initialClipState.y + safeDelta;
+                        newH = initialClipState.h - safeDelta;
                     }
                 }
 
-                if (e.shiftKey) {
+                // Snap logic (optional, keep it simple for now)
+
+                if (e.shiftKey && !isAlt && resizeDir.length === 2) {
                     const ratio = initialClipState.w / initialClipState.h;
                     if (Math.abs(localDx) > Math.abs(localDy)) {
                         newH = newW / ratio;
-                        // Clear vertical snap if shift-resize changes H away from snap
-                        if (snapBottom || snapCenterY) {
-                            // This is tricky. For now, let's just let it be.
-                        }
+                        if (resizeDir.includes('n')) newY = initialClipState.y + initialClipState.h - newH;
                     } else {
                         newW = newH * ratio;
+                        if (resizeDir.includes('w')) newX = initialClipState.x + initialClipState.w - newW;
                     }
                 }
 
                 setSnapLines({
-                    centerX: snapCenterX,
-                    centerY: snapCenterY,
-                    left: false,
-                    top: false,
-                    right: snapRight,
-                    bottom: snapBottom
+                    centerX: false, centerY: false, left: false, top: false, right: snapRight, bottom: snapBottom
                 });
 
-                onUpdate({ width: Math.round(newW), height: Math.round(newH) });
+                onUpdate({ x: Math.round(newX), y: Math.round(newY), width: Math.round(newW), height: Math.round(newH), crop: newCrop });
             }
 
             if (isRotating) {
@@ -190,6 +220,7 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
             setIsDragging(false);
             setIsResizing(false);
             setIsRotating(false);
+            setResizeDir(null);
             setInitialClipState(null);
             setSnapLines({ centerX: false, centerY: false, left: false, top: false, right: false, bottom: false });
         };
@@ -264,13 +295,24 @@ export const InteractOverlay: React.FC<InteractOverlayProps> = ({ clip, onUpdate
                 {/* Drag Handle (Invisible full area, but cursor indicates) */}
                 <div className="absolute inset-0 cursor-move hover:bg-blue-500/10 transition-colors" />
 
-                {/* Resize Handle (Bottom Right) */}
-                <div
-                    className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-blue-500 rounded-full cursor-nwse-resize z-50 shadow-md flex items-center justify-center"
-                    onMouseDown={(e) => handleMouseDown(e, 'resize')}
-                >
-                    <div className="w-1 h-1 bg-blue-500 rounded-full" />
-                </div>
+                {/* Resize Handles */}
+                {/* N */}
+                <div className="absolute -top-1.5 left-1/2 -ml-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-ns-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'n')} />
+                {/* S */}
+                <div className="absolute -bottom-1.5 left-1/2 -ml-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-ns-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 's')} />
+                {/* W */}
+                <div className="absolute top-1/2 -mt-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-ew-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'w')} />
+                {/* E */}
+                <div className="absolute top-1/2 -mt-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-ew-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'e')} />
+
+                {/* NW */}
+                <div className="absolute -top-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-nwse-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'nw')} />
+                {/* NE */}
+                <div className="absolute -top-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-nesw-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'ne')} />
+                {/* SW */}
+                <div className="absolute -bottom-1.5 -left-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-nesw-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'sw')} />
+                {/* SE */}
+                <div className="absolute -bottom-1.5 -right-1.5 w-4 h-4 bg-white border-2 border-primary rounded-full cursor-nwse-resize z-50 shadow-md flex items-center justify-center hover:scale-125 transition-transform" onMouseDown={(e) => handleMouseDown(e, 'resize', 'se')} />
 
                 {/* Info Label */}
                 <div className="absolute -top-6 left-0 bg-blue-500 text-white text-[10px] px-1.5 py-0.5 rounded shadow-sm whitespace-nowrap opacity-0 hover:opacity-100 transition-opacity">
