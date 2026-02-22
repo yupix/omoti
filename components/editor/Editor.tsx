@@ -528,7 +528,9 @@ export default function Editor() {
     useEffect(() => {
         const handleKeyDown = (e: KeyboardEvent) => {
             // Ignore if user is typing in an input
-            if (document.activeElement?.tagName === 'INPUT' || document.activeElement?.tagName === 'TEXTAREA') {
+            const activeTag = document.activeElement?.tagName;
+            const isContentEditable = (document.activeElement as HTMLElement)?.isContentEditable;
+            if (activeTag === 'INPUT' || activeTag === 'TEXTAREA' || isContentEditable) {
                 return;
             }
 
@@ -543,11 +545,25 @@ export default function Editor() {
                 setSelectedClipId(null);
                 setContextMenu(null);
             }
+
+            if (e.key === 'ArrowLeft') {
+                if (!selectedClipId) {
+                    e.preventDefault();
+                    handleSeek(Math.max(0, getEditorFrame() - 1));
+                }
+            }
+
+            if (e.key === 'ArrowRight') {
+                if (!selectedClipId) {
+                    e.preventDefault();
+                    handleSeek(Math.min(totalFrames, getEditorFrame() + 1));
+                }
+            }
         };
 
         window.addEventListener('keydown', handleKeyDown);
         return () => window.removeEventListener('keydown', handleKeyDown);
-    }, [selectedClipId]);
+    }, [selectedClipId, handleSeek, totalFrames]);
 
     // Close context menu on click
     useEffect(() => {
@@ -892,20 +908,20 @@ export default function Editor() {
                             {/* Video Player - skip when fullscreen to avoid double Player render */}
                             <div className="relative shadow-2xl rounded-sm overflow-hidden border border-white/10 bg-black h-full max-w-full aspect-video flex justify-center items-center">
                                 {!isPreviewFullscreen && (
-                                <Player
-                                    ref={onMainPlayerRef}
-                                    component={ResultVideo}
-                                    inputProps={inputProps}
-                                    durationInFrames={totalFrames}
-                                    compositionWidth={1280}
-                                    compositionHeight={720}
-                                    fps={30}
-                                    controls={false}
-                                    style={{
-                                        width: '100%',
-                                        height: '100%',
-                                    }}
-                                />
+                                    <Player
+                                        ref={onMainPlayerRef}
+                                        component={ResultVideo}
+                                        inputProps={inputProps}
+                                        durationInFrames={totalFrames}
+                                        compositionWidth={1280}
+                                        compositionHeight={720}
+                                        fps={30}
+                                        controls={false}
+                                        style={{
+                                            width: '100%',
+                                            height: '100%',
+                                        }}
+                                    />
                                 )}
                                 <PreviewClipOverlays
                                     clips={clips}
