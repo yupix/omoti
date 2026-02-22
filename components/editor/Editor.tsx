@@ -25,7 +25,7 @@ import { Sparkles } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
-import { Asset, getMediaDuration, getMediaDimensions } from './utils';
+import { Asset, AssetFolder, getMediaDuration, getMediaDimensions } from './utils';
 import { setFrame as setEditorFrame, getSnapshot as getEditorFrame } from './editorFrameStore';
 import { FrameDisplay, FullscreenFrameDisplay, FrameSeekBar, PreviewClipOverlays } from './EditorFrameComponents';
 
@@ -46,6 +46,8 @@ export default function Editor() {
                 if (parsed.tracks && parsed.tracks.length > 0) setTracks(parsed.tracks);
                 if (parsed.clips) setClips(parsed.clips);
                 if (parsed.primaryColor) setPrimaryColor(parsed.primaryColor);
+                if (parsed.assets) setAssets(parsed.assets);
+                if (parsed.assetFolders) setAssetFolders(parsed.assetFolders);
             } catch (e) {
                 console.error('Failed to load saved state', e);
             }
@@ -53,17 +55,6 @@ export default function Editor() {
         setIsLoaded(true);
     }, []);
 
-    // Save editor state to localStorage
-    useEffect(() => {
-        if (!isLoaded) return;
-        localStorage.setItem('omoti_editor_state', JSON.stringify({
-            tracks,
-            clips,
-            primaryColor
-        }));
-    }, [tracks, clips, primaryColor, isLoaded]);
-
-    const currentFrameRef = useRef(0); // for addClip etc - synced from store
     const [isPlaying, setIsPlaying] = useState(false);
     const [isExporting, setIsExporting] = useState(false);
     const [player, setPlayer] = useState<PlayerRef | null>(null);
@@ -71,7 +62,74 @@ export default function Editor() {
     const [activeTab, setActiveTab] = useState<'properties' | 'assets' | 'icons'>('properties');
     const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
     const [assets, setAssets] = useState<Asset[]>([]);
+    const [assetFolders, setAssetFolders] = useState<AssetFolder[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+
+    // Save editor state to localStorage
+    useEffect(() => {
+        if (!isLoaded) return;
+        localStorage.setItem('omoti_editor_state', JSON.stringify({
+            tracks,
+            clips,
+            primaryColor,
+            assets,
+            assetFolders
+        }));
+    }, [tracks, clips, primaryColor, assets, assetFolders, isLoaded]);
+
+    const handleCreateFolder = (name: string, parentId?: string) => {
+        const newFolder: AssetFolder = {
+            id: Math.random().toString(36).substring(2, 11),
+            name,
+            parentId
+        };
+        setAssetFolders(prev => [...prev, newFolder]);
+    };
+
+    const handleRenameFolder = (id: string, newName: string) => {
+        setAssetFolders(prev => prev.map(f => f.id === id ? { ...f, name: newName } : f));
+    };
+
+    const handleDeleteFolder = (id: string) => {
+        setAssetFolders(prev => {
+            const children = prev.filter(f => f.parentId === id);
+            // Move children folders up to current folder's parent
+            const folderToDelete = prev.find(f => f.id === id);
+            const parentOfDeleted = folderToDelete?.parentId;
+
+            return prev.filter(f => f.id !== id).map(f =>
+                f.parentId === id ? { ...f, parentId: parentOfDeleted } : f
+            );
+        });
+
+        // Move assets to root or parent? 
+        // VS Code style: keep them in the tree if possible?
+        // Simple way: move assets to root (or parent)
+        setAssets(prev => {
+            const folderToDelete = assetFolders.find(f => f.id === id);
+            return prev.map(a => a.folderId === id ? { ...a, folderId: folderToDelete?.parentId } : a);
+        });
+    };
+
+    const handleMoveAssetToFolder = (assetUrl: string, folderId?: string) => {
+        setAssets(prev => prev.map(a => a.url === assetUrl ? { ...a, folderId } : a));
+    };
+
+    const handleMoveFolderToFolder = (sourceId: string, targetId?: string) => {
+        if (sourceId === targetId) return;
+        // Prevent cyclic move
+        const isDescendant = (parent: string, child: string): boolean => {
+            const folder = assetFolders.find(f => f.id === child);
+            if (!folder || !folder.parentId) return false;
+            if (folder.parentId === parent) return true;
+            return isDescendant(parent, folder.parentId);
+        };
+        if (targetId && isDescendant(sourceId, targetId)) return;
+
+        setAssetFolders(prev => prev.map(f => f.id === sourceId ? { ...f, parentId: targetId } : f));
+    };
+
+    const currentFrameRef = useRef(0); // for addClip etc - synced from store
     const [localVolume, setLocalVolume] = useState<number | null>(null);
     const [availableLayers, setAvailableLayers] = useState<string[]>([]);
     const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
@@ -1111,8 +1169,14 @@ export default function Editor() {
                                     uploadFiles={uploadFiles}
                                     isUploading={isUploading}
                                     assets={assets}
+                                    assetFolders={assetFolders}
                                     addClip={addClip}
                                     removeAsset={removeAsset}
+                                    createFolder={handleCreateFolder}
+                                    renameFolder={handleRenameFolder}
+                                    deleteFolder={handleDeleteFolder}
+                                    moveAssetToFolder={handleMoveAssetToFolder}
+                                    moveFolderToFolder={handleMoveFolderToFolder}
                                     t={t}
                                 />
                             ) : (

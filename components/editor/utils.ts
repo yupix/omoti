@@ -41,4 +41,11 @@ export interface Asset {
     duration?: number; // in seconds
     width?: number;
     height?: number;
+    folderId?: string;
+}
+
+export interface AssetFolder {
+    id: string;
+    name: string;
+    parentId?: string;
 }

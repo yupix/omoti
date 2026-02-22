@@ -1,17 +1,27 @@
 import React, { useState, useEffect } from 'react';
-import { Loader2, Upload, Volume2, Layers, Plus, Image as ImageIcon, Trash2 } from 'lucide-react';
-import { Asset } from './utils';
-import { ClipboardEvent } from 'react';
+import {
+    Loader2, Upload, Volume2, Layers, Plus,
+    Image as ImageIcon, Trash2, FolderPlus, Folder as FolderIcon,
+    ChevronDown, ChevronRight, MoreVertical, Edit2
+} from 'lucide-react';
+import { Asset, AssetFolder } from './utils';
 import { ClipType } from '@/types';
 import { TFunction } from 'i18next';
+import { Button } from '@/components/ui/button';
 
 interface AssetsPanelProps {
     handleFileUpload: (e: React.ChangeEvent<HTMLInputElement>) => void;
     uploadFiles: (files: File[]) => void;
     isUploading: boolean;
     assets: Asset[];
+    assetFolders: AssetFolder[];
     addClip: (type: ClipType, contentOverride?: string, durationOverride?: number, startFrame?: number, trackId?: number, width?: number, height?: number) => void;
     removeAsset: (url: string) => void;
+    createFolder: (name: string, parentId?: string) => void;
+    renameFolder: (id: string, newName: string) => void;
+    deleteFolder: (id: string) => void;
+    moveAssetToFolder: (assetUrl: string, folderId?: string) => void;
+    moveFolderToFolder: (sourceId: string, targetId?: string) => void;
     t: TFunction;
 }
 
@@ -20,22 +30,179 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
     uploadFiles,
     isUploading,
     assets,
+    assetFolders,
     addClip,
     removeAsset,
+    createFolder,
+    renameFolder,
+    deleteFolder,
+    moveAssetToFolder,
+    moveFolderToFolder,
     t
 }) => {
     const [isDragActive, setIsDragActive] = useState(false);
     const [contextMenu, setContextMenu] = useState<{ x: number; y: number; url: string } | null>(null);
+    const [folderContextMenu, setFolderContextMenu] = useState<{ x: number; y: number; id: string; name: string } | null>(null);
+    const [emptyAreaContextMenu, setEmptyAreaContextMenu] = useState<{ x: number; y: number; parentId?: string } | null>(null);
+    const [openFolders, setOpenFolders] = useState<Set<string>>(new Set(['root']));
+    const [dropTarget, setDropTarget] = useState<string | null>(null);
 
     // Close context menu on click anywhere
     useEffect(() => {
-        const handleClick = () => setContextMenu(null);
+        const handleClick = () => {
+            setContextMenu(null);
+            setFolderContextMenu(null);
+            setEmptyAreaContextMenu(null);
+        };
         window.addEventListener('click', handleClick);
         return () => window.removeEventListener('click', handleClick);
     }, []);
 
+    const toggleFolder = (id: string) => {
+        const next = new Set(openFolders);
+        if (next.has(id)) next.delete(id);
+        else next.add(id);
+        setOpenFolders(next);
+    };
+
+    const handleNewFolder = (parentId?: string) => {
+        const name = prompt('Folder Name:', 'New Folder');
+        if (name) createFolder(name, parentId);
+    };
+
+    const handleRenameFolder = (id: string, currentName: string) => {
+        const name = prompt('Rename Folder:', currentName);
+        if (name && name !== currentName) renameFolder(id, name);
+    };
+
+    const onDrop = (e: React.DragEvent, targetFolderId?: string) => {
+        e.preventDefault();
+        e.stopPropagation();
+        setDropTarget(null);
+
+        const assetUrl = e.dataTransfer.getData('application/omoti-asset-url');
+        const sourceFolderId = e.dataTransfer.getData('application/omoti-folder-id');
+
+        if (assetUrl) {
+            moveAssetToFolder(assetUrl, targetFolderId);
+        } else if (sourceFolderId) {
+            moveFolderToFolder(sourceFolderId, targetFolderId);
+        }
+    };
+
+    const renderAsset = (asset: Asset) => (
+        <div
+            key={asset.url}
+            draggable
+            onDragStart={(e) => {
+                e.dataTransfer.setData('application/omoti-clip', JSON.stringify({
+                    type: asset.type,
+                    content: asset.url,
+                    duration: asset.duration,
+                    width: asset.width,
+                    height: asset.height
+                }));
+                e.dataTransfer.setData('application/omoti-asset-url', asset.url);
+            }}
+            className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all cursor-grab active:cursor-grabbing"
+            onClick={() => addClip(asset.type, asset.url, asset.duration, undefined, undefined, asset.width, asset.height)}
+            onContextMenu={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                setContextMenu({ x: e.clientX, y: e.clientY, url: asset.url });
+            }}
+            title={`${asset.name} ${asset.duration ? `(${asset.duration.toFixed(1)}s)` : ''}`}
+        >
+            {asset.type === 'video' ? (
+                <video src={asset.url} className="w-full h-full object-cover pointer-events-none" />
+            ) : asset.type === 'audio' ? (
+                <div className="w-full h-full flex items-center justify-center bg-secondary/50">
+                    <Volume2 className="text-muted-foreground" size={24} />
+                </div>
+            ) : asset.type === 'tachie' ? (
+                <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/50 gap-2">
+                    <Layers className="text-muted-foreground" size={24} />
+                    <span className="text-[8px] uppercase tracking-widest text-muted-foreground font-bold">PSD</span>
+                </div>
+            ) : (
+                <img src={asset.url} alt={asset.name} className="w-full h-full object-cover pointer-events-none" />
+            )}
+            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
+                <Plus className="text-white drop-shadow-md" size={20} />
+            </div>
+            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 pt-4">
+                <p className="text-[10px] text-white truncate px-0.5">{asset.name}</p>
+            </div>
+        </div>
+    );
+
+    const renderFolder = (folder: AssetFolder, level: number = 0) => {
+        const isOpen = openFolders.has(folder.id);
+        const childrenFolders = assetFolders.filter(f => f.parentId === folder.id);
+        const folderAssets = assets.filter(a => a.folderId === folder.id);
+        const isTarget = dropTarget === folder.id;
+
+        return (
+            <div key={folder.id} className="select-none">
+                <div
+                    draggable
+                    onDragStart={(e) => {
+                        e.dataTransfer.setData('application/omoti-folder-id', folder.id);
+                    }}
+                    onDragOver={(e) => { e.preventDefault(); e.stopPropagation(); setDropTarget(folder.id); }}
+                    onDragLeave={() => setDropTarget(null)}
+                    onDrop={(e) => onDrop(e, folder.id)}
+                    onContextMenu={(e) => {
+                        e.preventDefault();
+                        e.stopPropagation();
+                        setFolderContextMenu({ x: e.clientX, y: e.clientY, id: folder.id, name: folder.name });
+                    }}
+                    className={`flex items-center gap-2 p-1.5 rounded-md group transition-all cursor-pointer ${isTarget ? 'bg-primary/20 ring-1 ring-primary' : 'hover:bg-secondary/50'}`}
+                >
+                    <button
+                        onClick={(e) => { e.stopPropagation(); toggleFolder(folder.id); }}
+                        className="text-muted-foreground hover:text-foreground"
+                    >
+                        {isOpen ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
+                    </button>
+                    <FolderIcon size={16} className={(folderAssets.length > 0 || childrenFolders.length > 0) ? "text-primary/70" : "text-muted-foreground"} />
+                    <span className="text-xs font-medium flex-1 truncate">{folder.name}</span>
+
+                    <div className="flex items-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6"
+                            onClick={(e) => {
+                                e.stopPropagation();
+                                setFolderContextMenu({ x: e.clientX, y: e.clientY, id: folder.id, name: folder.name });
+                            }}
+                        >
+                            <MoreVertical size={14} />
+                        </Button>
+                    </div>
+                </div>
+
+                {isOpen && (
+                    <div className="pl-4 ml-2 border-l border-border/50 py-1 space-y-1">
+                        {childrenFolders.map(child => renderFolder(child, level + 1))}
+                        <div className="grid grid-cols-2 gap-2">
+                            {folderAssets.map(renderAsset)}
+                        </div>
+                        {childrenFolders.length === 0 && folderAssets.length === 0 && (
+                            <p className="text-[10px] text-muted-foreground py-2 text-center italic">Empty</p>
+                        )}
+                    </div>
+                )}
+            </div>
+        );
+    };
+
+    const rootFolders = assetFolders.filter(f => !f.parentId);
+    const rootAssets = assets.filter(a => !a.folderId);
+
     return (
-        <div className="space-y-4 animate-in slide-in-from-right duration-300">
+        <div className="space-y-4 animate-in slide-in-from-right duration-300 min-h-full pb-20">
             {/* Upload Box */}
             <div
                 className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group ${isDragActive ? 'border-primary bg-primary/10' : 'border-border hover:border-primary hover:bg-primary/5'}`}
@@ -70,75 +237,70 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                 </div>
             </div>
 
-            {/* Asset Grid */}
-            <div>
+            {/* Assets Section */}
+            <div
+                className="space-y-2 min-h-[300px]"
+                onContextMenu={(e) => {
+                    e.preventDefault();
+                    setEmptyAreaContextMenu({ x: e.clientX, y: e.clientY });
+                }}
+                onDragOver={(e) => { e.preventDefault(); setDropTarget('root'); }}
+                onDragLeave={(e) => { if (e.target === e.currentTarget) setDropTarget(null); }}
+                onDrop={(e) => onDrop(e, undefined)}
+            >
                 <div className="flex items-center justify-between mb-2">
                     <h2 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">{t('editor.assets.library')}</h2>
-                    <span className="text-[10px] text-muted-foreground">{assets.length} {t('editor.items')}</span>
+                    <div className="flex items-center gap-1">
+                        <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-muted-foreground hover:text-foreground"
+                            onClick={() => handleNewFolder()}
+                            title="New Folder"
+                        >
+                            <FolderPlus size={16} />
+                        </Button>
+                    </div>
                 </div>
 
-                {assets.length === 0 ? (
-                    <div className="text-center py-8 text-muted-foreground">
-                        <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
-                        <p className="text-xs">{t('editor.assets.empty')}</p>
+                <div
+                    className={`space-y-1 transition-colors rounded-md p-1 min-h-[200px] ${dropTarget === 'root' ? 'bg-primary/5 ring-1 ring-primary/20' : ''}`}
+                >
+                    {/* Folders Hierarchy */}
+                    {rootFolders.map(folder => renderFolder(folder))}
+
+                    {/* Root Assets Grid */}
+                    <div className="grid grid-cols-2 gap-2 pt-2">
+                        {rootAssets.map(renderAsset)}
                     </div>
-                ) : (
-                    <div className="grid grid-cols-2 gap-2">
-                        {assets.map((asset, i) => (
-                            <div
-                                key={i}
-                                draggable
-                                onDragStart={(e) => {
-                                    e.dataTransfer.setData('application/omoti-clip', JSON.stringify({
-                                        type: asset.type,
-                                        content: asset.url,
-                                        duration: asset.duration,
-                                        width: asset.width,
-                                        height: asset.height
-                                    }));
-                                }}
-                                className="group relative aspect-video bg-black/50 rounded-md overflow-hidden border border-border/50 cursor-pointer hover:border-primary transition-all cursor-grab active:cursor-grabbing"
-                                onClick={() => addClip(asset.type, asset.url, asset.duration, undefined, undefined, asset.width, asset.height)}
-                                onContextMenu={(e) => {
-                                    e.preventDefault();
-                                    e.stopPropagation();
-                                    setContextMenu({ x: e.clientX, y: e.clientY, url: asset.url });
-                                }}
-                                title={`${asset.name} ${asset.duration ? `(${asset.duration.toFixed(1)}s)` : ''}`}
-                            >
-                                {asset.type === 'video' ? (
-                                    <video src={asset.url} className="w-full h-full object-cover pointer-events-none" />
-                                ) : asset.type === 'audio' ? (
-                                    <div className="w-full h-full flex items-center justify-center bg-secondary/50">
-                                        <Volume2 className="text-muted-foreground" size={24} />
-                                    </div>
-                                ) : asset.type === 'tachie' ? (
-                                    <div className="w-full h-full flex flex-col items-center justify-center bg-secondary/50 gap-2">
-                                        <Layers className="text-muted-foreground" size={24} />
-                                        <span className="text-[8px] uppercase tracking-widest text-muted-foreground font-bold">PSD</span>
-                                    </div>
-                                ) : (
-                                    <img src={asset.url} alt={asset.name} className="w-full h-full object-cover pointer-events-none" />
-                                )}
-                                <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors flex items-center justify-center opacity-0 group-hover:opacity-100">
-                                    <Plus className="text-white drop-shadow-md" size={20} />
-                                </div>
-                                <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/80 to-transparent p-1.5 pt-4">
-                                    <p className="text-[10px] text-white truncate px-0.5">{asset.name}</p>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                )}
+
+                    {assets.length === 0 && assetFolders.length === 0 && (
+                        <div className="text-center py-8 text-muted-foreground">
+                            <ImageIcon className="mx-auto h-8 w-8 opacity-20 mb-2" />
+                            <p className="text-xs">{t('editor.assets.empty')}</p>
+                        </div>
+                    )}
+                </div>
             </div>
 
-            {/* Context Menu */}
+            {/* Context Menu for Assets */}
             {contextMenu && (
                 <div
-                    className="fixed z-50 min-w-[160px] bg-card border border-border shadow-xl rounded-md p-1"
+                    className="fixed z-50 min-w-[160px] bg-card border border-border shadow-xl rounded-md p-1 animate-in fade-in zoom-in-95 duration-100"
                     style={{ left: contextMenu.x, top: contextMenu.y }}
                     onClick={(e) => e.stopPropagation()}
                 >
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            handleNewFolder();
+                            setContextMenu(null);
+                        }}
+                    >
+                        <FolderPlus size={14} />
+                        New Folder
+                    </button>
+                    <Separator className="my-1 bg-border/50" />
                     <button
                         className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground text-destructive flex items-center gap-2 rounded-sm"
                         onClick={() => {
@@ -151,8 +313,73 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                     </button>
                 </div>
             )}
+
+            {/* Context Menu for Folders */}
+            {folderContextMenu && (
+                <div
+                    className="fixed z-50 min-w-[160px] bg-card border border-border shadow-xl rounded-md p-1 animate-in fade-in zoom-in-95 duration-100"
+                    style={{ left: folderContextMenu.x, top: folderContextMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            handleNewFolder(folderContextMenu.id);
+                            setFolderContextMenu(null);
+                        }}
+                    >
+                        <FolderPlus size={14} />
+                        New Subfolder
+                    </button>
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            handleRenameFolder(folderContextMenu.id, folderContextMenu.name);
+                            setFolderContextMenu(null);
+                        }}
+                    >
+                        <Edit2 size={14} />
+                        Rename
+                    </button>
+                    <Separator className="my-1 bg-border/50" />
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground text-destructive flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            deleteFolder(folderContextMenu.id);
+                            setFolderContextMenu(null);
+                        }}
+                    >
+                        <Trash2 size={14} />
+                        Delete
+                    </button>
+                </div>
+            )}
+
+            {/* Context Menu for Empty Area */}
+            {emptyAreaContextMenu && (
+                <div
+                    className="fixed z-50 min-w-[160px] bg-card border border-border shadow-xl rounded-md p-1 animate-in fade-in zoom-in-95 duration-100"
+                    style={{ left: emptyAreaContextMenu.x, top: emptyAreaContextMenu.y }}
+                    onClick={(e) => e.stopPropagation()}
+                >
+                    <button
+                        className="w-full text-left px-2 py-1.5 text-sm outline-none transition-colors hover:bg-accent hover:text-accent-foreground flex items-center gap-2 rounded-sm"
+                        onClick={() => {
+                            handleNewFolder(emptyAreaContextMenu.parentId);
+                            setEmptyAreaContextMenu(null);
+                        }}
+                    >
+                        <FolderPlus size={14} />
+                        New Folder
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
+
+const Separator = ({ className }: { className?: string }) => (
+    <div className={`h-px w-full ${className}`} />
+);
 
 export const AssetsPanel = React.memo(AssetsPanelInner);
