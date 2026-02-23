@@ -16,7 +16,7 @@ export async function GET(req: NextRequest) {
             if (!res || !res.ok) return NextResponse.json([]);
             const data = await res.json();
             return NextResponse.json(data.presets || []);
-        } else {
+        } else if (provider === 'cevioai' || provider === 'voicevox') {
             const res = await fetch(`${baseUrl}/speakers`).catch(() => null);
             if (!res || !res.ok) return NextResponse.json([]);
             const data = await res.json();

@@ -27,10 +27,11 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
             optional: string[]
         },
         voice?: {
-            provider: 'voicevox' | 'aivoice',
+            provider: 'voicevox' | 'aivoice' | 'cevioai',
             voicevoxSpeaker: string,
             voicevoxStyle?: number,
-            aivoicePreset: string
+            aivoicePreset: string,
+            cevioaiSpeaker: string
         }
     }[]>([]);
     const [configTachie, setConfigTachie] = useState<string | null>(null);
@@ -40,11 +41,13 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
     // Synthesis Metadata for Voice Config
     const [voicevoxSpeakers, setVoicevoxSpeakers] = useState<any[]>([]);
     const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
+    const [cevioaiSpeakers, setCevioaiSpeakers] = useState<any[]>([]);
 
     // From Editor Context (passed via props or fetched here)
     // For simplicity, let's assume we can fetch them here based on URLs
     const voicevoxBaseUrl = 'http://127.0.0.1:50021';
     const aivoiceBaseUrl = 'http://localhost:8000';
+    const cevioaiBaseUrl = 'http://localhost:8001';
     const [loadingLayers, setLoadingLayers] = useState(false);
     const [loadingPreview, setLoadingPreview] = useState(false);
     const [loading, setLoading] = useState(false);
@@ -73,6 +76,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                 .then(r => r.json()).then(setVoicevoxSpeakers).catch(() => { });
             fetch(`/api/synthesize/metadata?provider=aivoice&baseUrl=${encodeURIComponent(aivoiceBaseUrl)}`)
                 .then(r => r.json()).then(setAiVoicePresets).catch(() => { });
+            fetch(`/api/synthesize/metadata?provider=cevioai&baseUrl=${encodeURIComponent(cevioaiBaseUrl)}`)
+                .then(r => r.json()).then(setCevioaiSpeakers).catch(() => { });
         }
     }, [open]);
 
@@ -179,7 +184,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                     provider: 'voicevox' as const,
                     voicevoxSpeaker: '',
                     voicevoxStyle: undefined,
-                    aivoicePreset: ''
+                    aivoicePreset: '',
+                    cevioaiSpeaker: ''
                 }
             }];
             // Try auto-configure for new characters if they look like they need it
@@ -542,6 +548,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                                     <div className="flex gap-2">
                                                         <Button variant={voice.provider === 'voicevox' ? 'default' : 'outline'} className="flex-1 h-12" onClick={() => updateTachieInfo(data.id, 'voice', { ...voice, provider: 'voicevox' as const })}>VOICEVOX</Button>
                                                         <Button variant={voice.provider === 'aivoice' ? 'default' : 'outline'} className="flex-1 h-12" onClick={() => updateTachieInfo(data.id, 'voice', { ...voice, provider: 'aivoice' as const })}>AIVOICE</Button>
+                                                        <Button variant={voice.provider === 'cevioai' ? 'default' : 'outline'} className="flex-1 h-12" onClick={() => updateTachieInfo(data.id, 'voice', { ...voice, provider: 'cevioai' as const })}>CeVIO AI</Button>
                                                     </div>
                                                 </div>
 
@@ -568,12 +575,20 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                                             </div>
                                                         )}
                                                     </>
-                                                ) : (
+                                                ) : voice.provider === 'aivoice' ? (
                                                     <div className="grid gap-2">
                                                         <label className="text-xs font-bold uppercase text-muted-foreground">Preset</label>
                                                         <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={voice.aivoicePreset || ''} onChange={(e) => updateTachieInfo(data.id, 'voice', { ...voice, aivoicePreset: e.target.value })}>
                                                             <option value="">Select Preset...</option>
                                                             {aiVoicePresets.map((p: string) => <option key={p} value={p}>{p}</option>)}
+                                                        </select>
+                                                    </div>
+                                                ) : (
+                                                    <div className="grid gap-2">
+                                                        <label className="text-xs font-bold uppercase text-muted-foreground">Cast</label>
+                                                        <select className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm" value={voice.cevioaiSpeaker || ''} onChange={(e) => updateTachieInfo(data.id, 'voice', { ...voice, cevioaiSpeaker: e.target.value })}>
+                                                            <option value="">Select Cast...</option>
+                                                            {cevioaiSpeakers.map((s: any) => <option key={s.speaker_uuid} value={s.speaker_uuid}>{s.name}</option>)}
                                                         </select>
                                                     </div>
                                                 )}

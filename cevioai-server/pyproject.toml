@@ -1,0 +1,14 @@
+[project]
+name = "cevioai-server"
+version = "0.1.0"
+description = "Add your description here"
+readme = "README.md"
+requires-python = ">=3.13"
+dependencies = [
+    "cevioai-python",
+    "fastapi>=0.131.0",
+    "uvicorn>=0.41.0",
+]
+
+[tool.uv.sources]
+cevioai-python = { git = "https://github.com/TeamBlackCrystal/cevioai-python.git" }
