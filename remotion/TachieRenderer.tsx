@@ -111,7 +111,19 @@ export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip, assetBaseU
                         // Leaf logic
                         if (isOpenMouth) isVisible = !!isMouthOpen;
                         else if (isClosedMouth) isVisible = !isMouthOpen;
-                        else isVisible = !!(inBaseList || isMandatory);
+                        else {
+                            isVisible = !!(inBaseList || isMandatory);
+
+                            // Prevent double mouth: If lip-sync is active and this is a mouth-related layer
+                            // in the base list but not explicitly managed, treat it as a closed-mouth layer.
+                            const isAnyMouthConfigured = (clip.mouthOpenLayers?.length || 0) > 0 || (clip.mouthClosedLayers?.length || 0) > 0;
+                            if (isVisible && !isMandatory && isAnyMouthConfigured) {
+                                const pathLower = currentPath.toLowerCase();
+                                if (pathLower.includes('mouth') || pathLower.includes('口')) {
+                                    isVisible = !isMouthOpen;
+                                }
+                            }
+                        }
 
                         shouldTraverse = false;
                     }
