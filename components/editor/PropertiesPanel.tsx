@@ -811,6 +811,9 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                 <SelectItem value="brightness">Brightness</SelectItem>
                                                 <SelectItem value="contrast">Contrast</SelectItem>
                                                 <SelectItem value="invert">Invert</SelectItem>
+                                                <SelectItem value="saturate">Saturate</SelectItem>
+                                                <SelectItem value="drop-shadow">Drop Shadow (Advanced)</SelectItem>
+                                                <SelectItem value="blur-complex">Complex Blur</SelectItem>
                                             </SelectContent>
                                         </Select>
                                         <Button
@@ -825,7 +828,7 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                     </div>
 
                                     <div className="grid grid-cols-2 gap-2">
-                                        {['glow', 'outline', 'shadow'].includes(effect.type) && (
+                                        {['glow', 'outline', 'shadow', 'drop-shadow'].includes(effect.type) && (
                                             <div className="space-y-0.5">
                                                 <Label className="text-[9px] text-muted-foreground">Color</Label>
                                                 <Input
@@ -839,19 +842,47 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                 />
                                             </div>
                                         )}
-                                        {['glow', 'outline', 'shadow', 'blur'].includes(effect.type) && (
+                                        {['glow', 'outline', 'shadow', 'blur', 'drop-shadow', 'blur-complex'].includes(effect.type) && (
                                             <div className="space-y-0.5">
-                                                <Label className="text-[9px] text-muted-foreground">{effect.type === 'blur' ? 'Blur' : 'Width'}</Label>
+                                                <Label className="text-[9px] text-muted-foreground">{effect.type.includes('blur') ? 'Blur' : 'Width'}</Label>
                                                 <Input
-                                                    type="number" value={effect.type === 'blur' ? (effect.blur ?? 5) : (effect.width ?? 10)}
+                                                    type="number" value={effect.type.includes('blur') ? (effect.blur ?? 5) : (effect.width ?? 10)}
                                                     onChange={e => {
                                                         const next = [...(selectedClip.effects || [])];
-                                                        next[idx] = { ...effect, [effect.type === 'blur' ? 'blur' : 'width']: Number(e.target.value) };
+                                                        next[idx] = { ...effect, [effect.type.includes('blur') ? 'blur' : 'width']: Number(e.target.value) };
                                                         handleUpdateClip('effects', next);
                                                     }}
                                                     className="h-6 text-xs"
                                                 />
                                             </div>
+                                        )}
+                                        {effect.type === 'drop-shadow' && (
+                                            <>
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-[9px] text-muted-foreground">Offset X</Label>
+                                                    <Input
+                                                        type="number" value={effect.x ?? 5}
+                                                        onChange={e => {
+                                                            const next = [...(selectedClip.effects || [])];
+                                                            next[idx] = { ...effect, x: Number(e.target.value) };
+                                                            handleUpdateClip('effects', next);
+                                                        }}
+                                                        className="h-6 text-xs"
+                                                    />
+                                                </div>
+                                                <div className="space-y-0.5">
+                                                    <Label className="text-[9px] text-muted-foreground">Offset Y</Label>
+                                                    <Input
+                                                        type="number" value={effect.y ?? 5}
+                                                        onChange={e => {
+                                                            const next = [...(selectedClip.effects || [])];
+                                                            next[idx] = { ...effect, y: Number(e.target.value) };
+                                                            handleUpdateClip('effects', next);
+                                                        }}
+                                                        className="h-6 text-xs"
+                                                    />
+                                                </div>
+                                            </>
                                         )}
                                         {['pulse', 'float'].includes(effect.type) && (
                                             <div className="space-y-0.5 col-span-2">
@@ -895,7 +926,7 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                             </CardTitle>
                         </CardHeader>
                         <CardContent className="p-3 space-y-4">
-                            {(['x', 'y', 'rotate', 'scale', 'opacity'] as const).map(prop => {
+                            {(['x', 'y', 'z', 'rotate', 'scale', 'opacity', 'skewX', 'skewY', 'perspective', 'blur', 'brightness', 'contrast', 'saturate', 'hueRotate', 'grayscale', 'invert'] as const).map(prop => {
                                 const propKeyframes = selectedClip.keyframes?.[prop] || [];
                                 const relFrame = Math.max(0, currentFrame - selectedClip.startFrame);
                                 const isKeyedAtCurrent = propKeyframes.some(f => f.frame === relFrame);
@@ -916,8 +947,8 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                         handleUpdateClip('keyframes', { ...currentKeyframes, [prop]: next });
                                                     } else {
                                                         let val = 0;
-                                                        if (prop === 'scale') val = 1;
-                                                        if (prop === 'opacity') val = 1;
+                                                        if (['scale', 'opacity', 'brightness', 'contrast', 'saturate'].includes(prop)) val = 1;
+                                                        if (prop === 'perspective') val = 1000;
                                                         if (prop === 'x') val = selectedClip.x || 0;
                                                         if (prop === 'y') val = selectedClip.y || 0;
                                                         if (prop === 'rotate') val = selectedClip.rotate || 0;

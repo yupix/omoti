@@ -42,7 +42,7 @@ export interface Clip {
     facing?: 'left' | 'right'; // Semantic direction the character is facing in the asset
     mirror?: boolean; // Whether to flip the clip horizontally
     keyframes?: {
-        [key in 'x' | 'y' | 'width' | 'height' | 'rotate' | 'opacity' | 'scale']?: Keyframe[];
+        [key in 'x' | 'y' | 'width' | 'height' | 'rotate' | 'opacity' | 'scale' | 'blur' | 'brightness' | 'contrast' | 'saturate' | 'grayscale' | 'hueRotate' | 'invert' | 'skewX' | 'skewY' | 'z' | 'perspective']?: Keyframe[];
     };
 }
 
@@ -53,12 +53,14 @@ export interface Keyframe {
 }
 
 export interface Effect {
-    type: 'glow' | 'outline' | 'shadow' | 'blur' | 'sepia' | 'grayscale' | 'pulse' | 'float' | 'hue-rotate' | 'brightness' | 'contrast' | 'invert';
+    type: 'glow' | 'outline' | 'shadow' | 'blur' | 'sepia' | 'grayscale' | 'pulse' | 'float' | 'hue-rotate' | 'brightness' | 'contrast' | 'invert' | 'saturate' | 'drop-shadow' | 'blur-complex';
     color?: string;
     width?: number; // Spread or thickness
     blur?: number;
     opacity?: number;
     intensity?: number; // For animations like shake/pulse
+    x?: number; // shadow offset x
+    y?: number; // shadow offset y
 }
 
 export interface CodeStep {

@@ -105,20 +105,26 @@ export async function POST(req: NextRequest) {
                       "layer": "background" | "foreground",
                       "x": number, "y": number, "width": number, "height": number,
                       "animation": { "type": string, "duration": number },
-                      "keyframes": {
+                      "keyframes": { // Supported properties: x, y, z, rotate, scale, skewX, skewY, perspective, opacity, blur, brightness, contrast, saturate, hueRotate, grayscale, invert
                          "x": [{ "frame": number, "value": number, "easing": "linear" | "ease-in" | "ease-out" | "ease-in-out" }],
-                         "y": [{ "frame": number, "value": number }],
-                         "opacity": [{ "frame": number, "value": number }],
-                         "scale": [{ "frame": number, "value": number }],
-                         "rotate": [{ "frame": number, "value": number }]
+                         "z": [{ "frame": number, "value": number }],
+                         "perspective": [{ "frame": number, "value": number }],
+                         "blur": [{ "frame": number, "value": number }],
+                         "brightness": [{ "frame": number, "value": number }],
+                         "saturate": [{ "frame": number, "value": number }],
+                         "opacity": [{ "frame": number, "value": number }]
                       },
                       "effects": [{ "type": string, "color": "#hex", "intensity": 1 }],
                       "style": { "backgroundColor": "#hex", "color": "#hex", "borderRadius": "50%", "opacity": 0.8 }
                     }
                   ],
-                  "keyframes": { // Apply to character's movement
+                  "keyframes": { // Movement/Effects for the main character
                      "x": [{ "frame": number, "value": number }],
-                     "y": [{ "frame": number, "value": number }]
+                     "y": [{ "frame": number, "value": number }],
+                     "z": [{ "frame": number, "value": number }],
+                     "perspective": [{ "frame": number, "value": number }],
+                     "blur": [{ "frame": number, "value": number }],
+                     "opacity": [{ "frame": number, "value": number }]
                   },
                   "visualDescription": "Brief description",
                   "position": "left" | "right" | "center",
@@ -135,16 +141,19 @@ export async function POST(req: NextRequest) {
             Tone: STRICTLY FOLLOW the tone of the User Request.
 
              ANIMATIONS: fade, pop, slideUp, slideDown, slideLeft, slideRight, spin, shake, bounce.
-             EFFECTS: glow, outline, shadow, blur, sepia, grayscale, pulse, float, hue-rotate, brightness, contrast, invert.
+             EFFECTS: glow, outline, shadow, drop-shadow, blur, blur-complex, sepia, grayscale, saturate, invert, pulse, float, hue-rotate, brightness, contrast.
+             KEYFRAMEABLE: x, y, z, rotate, scale, skewX, skewY, perspective, opacity, blur, brightness, contrast, saturate, hueRotate, grayscale, invert.
 
-             CREATIVITY GUIDE:
-             1. KEYFRAMES: For advanced movement, use "keyframes". 
-                - Example: Move character from left to right: "x": [{frame:0, value:50}, {frame:60, value:800}].
-                - You can combine multiple properties (x, y, opacity, scale, rotate).
-             2. SHAPES (Circle/Box): Use "type": "shape" with "content": "circle" or "rect". 
-             3. ICONS: Use "type": "icon" with "content": "lucide:NAME".
-             4. EMOTION: Use "shake" when character is angry, "bounce" when happy, "pulse" for important points.
-             5. OVERLAYS: Use them for decorative background elements or floating foreground info.
+             CREATIVITY GUIDE & CINEMATIC HACKS:
+             1. 3D & THEATRICAL: Use "z", "perspective", and "skew". 
+                - Zoom in effect: "z": [{frame:0, value:-1000}, {frame:40, value:0, easing:"ease-out"}].
+                - 3D Slide: Combine x movement with rotate and perspective.
+             2. MOOD SHIFTS: Keyframe "brightness", "contrast", and "grayscale".
+                - Dynamic highlighting: Pulse "brightness" from 1 to 1.5.
+             3. KEYFRAMES: You MUST use keyframes for any motion that isn't a simple entrance.
+             4. SHAPES (Circle/Box): Use "type": "shape" with "content": "circle" or "rect". 
+             5. ICONS: Use "type": "icon" with "content": "lucide:NAME".
+             6. OVERLAYS: Background decorations (low z, low opacity) or foreground popups.
 
             IMPORTANT: Return ONLY valid JSON.`;
 

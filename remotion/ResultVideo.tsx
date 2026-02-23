@@ -120,9 +120,22 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     const currentScale = interpolateKeyframes(clip.keyframes?.scale, frame, 1);
     const currentX = interpolateKeyframes(clip.keyframes?.x, frame, clip.x || 0);
     const currentY = interpolateKeyframes(clip.keyframes?.y, frame, clip.y || 0);
+    const currentZ = interpolateKeyframes(clip.keyframes?.z, frame, 0);
+    const currentSkewX = interpolateKeyframes(clip.keyframes?.skewX, frame, 0);
+    const currentSkewY = interpolateKeyframes(clip.keyframes?.skewY, frame, 0);
+    const currentPerspective = interpolateKeyframes(clip.keyframes?.perspective, frame, 1000);
+
+    // Filter Keyframes
+    const kfBlur = interpolateKeyframes(clip.keyframes?.blur, frame, 0);
+    const kfBrightness = interpolateKeyframes(clip.keyframes?.brightness, frame, 1);
+    const kfContrast = interpolateKeyframes(clip.keyframes?.contrast, frame, 1);
+    const kfSaturate = interpolateKeyframes(clip.keyframes?.saturate, frame, 1);
+    const kfGrayscale = interpolateKeyframes(clip.keyframes?.grayscale, frame, 0);
+    const kfHueRotate = interpolateKeyframes(clip.keyframes?.hueRotate, frame, 0);
+    const kfInvert = interpolateKeyframes(clip.keyframes?.invert, frame, 0);
 
     let opacity = currentOpacity;
-    let transformString = `rotate(${currentRotate}deg)`;
+    let transformString = `perspective(${currentPerspective}px) translateZ(${currentZ}px) rotate(${currentRotate}deg) skew(${currentSkewX}deg, ${currentSkewY}deg)`;
 
     if (clip.mirror) {
         transformString += ' scaleX(-1)';
@@ -173,6 +186,14 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
 
     // Calculate Effects Styles
     let filterString = '';
+    if (kfBlur > 0) filterString += ` blur(${kfBlur}px)`;
+    if (kfBrightness !== 1) filterString += ` brightness(${kfBrightness * 100}%)`;
+    if (kfContrast !== 1) filterString += ` contrast(${kfContrast * 100}%)`;
+    if (kfSaturate !== 1) filterString += ` saturate(${kfSaturate * 100}%)`;
+    if (kfGrayscale > 0) filterString += ` grayscale(${kfGrayscale * 100}%)`;
+    if (kfHueRotate > 0) filterString += ` hue-rotate(${kfHueRotate}deg)`;
+    if (kfInvert > 0) filterString += ` invert(${kfInvert * 100}%)`;
+
     let textShadowString = '';
     let extraStyles: React.CSSProperties = {};
 
@@ -221,6 +242,12 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                 filterString += ` contrast(${opacity * 200}%)`;
             } else if (effect.type === 'invert') {
                 filterString += ` invert(${opacity * 100}%)`;
+            } else if (effect.type === 'saturate') {
+                filterString += ` saturate(${opacity * 300}%)`;
+            } else if (effect.type === 'drop-shadow') {
+                filterString += ` drop-shadow(${effect.x ?? 5}px ${effect.y ?? 5}px ${blur}px ${color})`;
+            } else if (effect.type === 'blur-complex') {
+                filterString += ` blur(${blur}px)`;
             }
         });
     }
