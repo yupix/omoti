@@ -18,6 +18,35 @@ import { loadFont as loadMontserrat } from "@remotion/google-fonts/Montserrat";
 import { loadFont as loadPlayfairDisplay } from "@remotion/google-fonts/PlayfairDisplay";
 import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
 import { loadFont as loadBebasNeue } from "@remotion/google-fonts/BebasNeue";
+import { Easing } from 'remotion';
+
+const interpolateKeyframes = (keyframes: any[] | undefined, frame: number, defaultValue: number) => {
+    if (!keyframes || keyframes.length === 0) return defaultValue;
+    if (keyframes.length === 1) return keyframes[0].value;
+
+    const sorted = [...keyframes].sort((a, b) => a.frame - b.frame);
+
+    if (frame <= sorted[0].frame) return sorted[0].value;
+    if (frame >= sorted[sorted.length - 1].frame) return sorted[sorted.length - 1].value;
+
+    for (let i = 0; i < sorted.length - 1; i++) {
+        const k1 = sorted[i];
+        const k2 = sorted[i + 1];
+        if (frame >= k1.frame && frame <= k2.frame) {
+            let easing = Easing.linear;
+            if (k1.easing === 'ease-in') easing = Easing.in(Easing.exp);
+            if (k1.easing === 'ease-out') easing = Easing.out(Easing.exp);
+            if (k1.easing === 'ease-in-out') easing = Easing.inOut(Easing.exp);
+
+            return interpolate(frame, [k1.frame, k2.frame], [k1.value, k2.value], {
+                extrapolateLeft: 'clamp',
+                extrapolateRight: 'clamp',
+                easing
+            });
+        }
+    }
+    return defaultValue;
+};
 import { loadFont as loadPermanentMarker } from "@remotion/google-fonts/PermanentMarker";
 
 // Preload fonts - Japanese fonts use default (no japanese subset in @remotion/google-fonts)
@@ -82,37 +111,65 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     const { fps } = useVideoConfig();
 
     // Calculate Animation Styles
-    // Calculate Animation Styles
-    // Calculate Animation Styles
-    let opacity = 1;
-    let transformString = `rotate(${clip.rotate || 0}deg)`;
+    const animType = clip.animation?.type || 'none';
+    const animDuration = Math.max(1, clip.animation?.duration || 15);
+
+    // Initial values (static or from keyframes)
+    const currentRotate = interpolateKeyframes(clip.keyframes?.rotate, frame, clip.rotate || 0);
+    const currentOpacity = interpolateKeyframes(clip.keyframes?.opacity, frame, 1);
+    const currentScale = interpolateKeyframes(clip.keyframes?.scale, frame, 1);
+    const currentX = interpolateKeyframes(clip.keyframes?.x, frame, clip.x || 0);
+    const currentY = interpolateKeyframes(clip.keyframes?.y, frame, clip.y || 0);
+
+    let opacity = currentOpacity;
+    let transformString = `rotate(${currentRotate}deg)`;
 
     if (clip.mirror) {
         transformString += ' scaleX(-1)';
     }
 
-    if (clip.animation?.type === 'fade') {
-        const animDuration = Math.max(1, clip.animation.duration || 10);
+    if (animType === 'fade') {
         const fadeIn = interpolate(frame, [0, animDuration], [0, 1], { extrapolateRight: 'clamp' });
         const fadeOut = interpolate(frame, [Math.max(animDuration, clip.durationInFrames - animDuration), clip.durationInFrames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-        opacity = fadeIn * fadeOut;
-        transformString += ' scale(1)';
-    } else if (clip.animation?.type === 'pop') {
-        const scale = spring({
-            fps,
-            frame,
-            config: { damping: 10 }
-        });
-        transformString += ` scale(${scale})`;
-    } else if (clip.animation?.type === 'slide') {
-        const slideY = interpolate(frame, [0, 20], [100, 0], { extrapolateRight: 'clamp', easing: (t) => t * (2 - t) }); // Slide up
-        transformString += ` translateY(${slideY}%)`;
-        opacity = interpolate(frame, [0, 10], [0, 1], { extrapolateRight: 'clamp' });
-    } else {
-        transformString += ' scale(1)';
+        opacity *= (fadeIn * fadeOut);
+    } else if (animType === 'pop') {
+        const popScale = spring({ fps, frame, config: { damping: 10 } });
+        transformString += ` scale(${currentScale * popScale})`;
+    } else if (animType === 'slide' || animType === 'slideUp') {
+        const offset = interpolate(frame, [0, animDuration], [100, 0], { extrapolateRight: 'clamp', easing: (t) => t * (2 - t) });
+        transformString += ` translateY(${offset}px)`;
+        opacity *= interpolate(frame, [0, animDuration / 2], [0, 1], { extrapolateRight: 'clamp' });
+    } else if (animType === 'slideDown') {
+        const offset = interpolate(frame, [0, animDuration], [-100, 0], { extrapolateRight: 'clamp', easing: (t) => t * (2 - t) });
+        transformString += ` translateY(${offset}px)`;
+        opacity *= interpolate(frame, [0, animDuration / 2], [0, 1], { extrapolateRight: 'clamp' });
+    } else if (animType === 'slideLeft') {
+        const offset = interpolate(frame, [0, animDuration], [100, 0], { extrapolateRight: 'clamp', easing: (t) => t * (2 - t) });
+        transformString += ` translateX(${offset}px)`;
+        opacity *= interpolate(frame, [0, animDuration / 2], [0, 1], { extrapolateRight: 'clamp' });
+    } else if (animType === 'slideRight') {
+        const offset = interpolate(frame, [0, animDuration], [-100, 0], { extrapolateRight: 'clamp', easing: (t) => t * (2 - t) });
+        transformString += ` translateX(${offset}px)`;
+        opacity *= interpolate(frame, [0, animDuration / 2], [0, 1], { extrapolateRight: 'clamp' });
+    } else if (animType === 'spin') {
+        const rotation = interpolate(frame, [0, animDuration], [0, 360], { extrapolateRight: 'clamp' });
+        transformString += ` rotate(${rotation}deg)`;
+    } else if (animType === 'shake') {
+        const offset = Math.sin(frame * 0.5) * 10 * interpolate(frame, [0, animDuration], [1, 0], { extrapolateRight: 'clamp' });
+        transformString += ` translateX(${offset}px)`;
+    } else if (animType === 'bounce') {
+        const absOffset = Math.abs(Math.sin(frame * 0.2)) * 30 * interpolate(frame, [0, animDuration], [1, 0], { extrapolateRight: 'clamp' });
+        transformString += ` translateY(${-absOffset}px)`;
     }
 
-    const animationStyle: React.CSSProperties = { opacity, transform: transformString };
+    if (!transformString.includes('scale')) transformString += ` scale(${currentScale})`;
+
+    const animationStyle: React.CSSProperties = {
+        opacity,
+        transform: transformString,
+        left: currentX,
+        top: currentY
+    };
 
     // Calculate Effects Styles
     let filterString = '';
@@ -150,6 +207,20 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                 filterString += ` sepia(${opacity * 100}%)`;
             } else if (effect.type === 'grayscale') {
                 filterString += ` grayscale(${opacity * 100}%)`;
+            } else if (effect.type === 'pulse') {
+                const scale = 1 + (Math.sin(frame * 0.2) * 0.1 * (effect.intensity ?? 1));
+                transformString += ` scale(${scale})`;
+            } else if (effect.type === 'float') {
+                const bounce = Math.sin(frame * 0.1) * 10 * (effect.intensity ?? 1);
+                transformString += ` translateY(${bounce}px)`;
+            } else if (effect.type === 'hue-rotate') {
+                filterString += ` hue-rotate(${opacity * 360}deg)`;
+            } else if (effect.type === 'brightness') {
+                filterString += ` brightness(${opacity * 200}%)`;
+            } else if (effect.type === 'contrast') {
+                filterString += ` contrast(${opacity * 200}%)`;
+            } else if (effect.type === 'invert') {
+                filterString += ` invert(${opacity * 100}%)`;
             }
         });
     }
@@ -168,8 +239,8 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
 
     const positionStyle: React.CSSProperties = {
         position: 'absolute',
-        left: isPositioned ? clip.x : 0,
-        top: isPositioned ? clip.y : 0,
+        left: isPositioned ? (animationStyle.left ?? clip.x ?? 0) : 0,
+        top: isPositioned ? (animationStyle.top ?? clip.y ?? 0) : 0,
         width: isPositioned ? (clip.width || 400) : '100%',
         height: isPositioned ? (clip.height || 400) : '100%',
         display: 'flex',

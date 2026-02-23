@@ -11,7 +11,7 @@ export interface Clip {
     style?: React.CSSProperties; // Simple styling for now
     title?: string; // For display in timeline
     animation?: {
-        type: 'fade' | 'pop' | 'slide' | 'none';
+        type: 'fade' | 'pop' | 'slide' | 'slideUp' | 'slideDown' | 'slideLeft' | 'slideRight' | 'spin' | 'shake' | 'bounce' | 'none';
         duration: number; // in frames
     };
     x?: number; // Position X (pixels)
@@ -41,14 +41,24 @@ export interface Clip {
     mandatoryLayers?: string[]; // Layers that are always visible
     facing?: 'left' | 'right'; // Semantic direction the character is facing in the asset
     mirror?: boolean; // Whether to flip the clip horizontally
+    keyframes?: {
+        [key in 'x' | 'y' | 'width' | 'height' | 'rotate' | 'opacity' | 'scale']?: Keyframe[];
+    };
+}
+
+export interface Keyframe {
+    frame: number; // Relative to clip start
+    value: number;
+    easing?: 'linear' | 'ease-in' | 'ease-out' | 'ease-in-out';
 }
 
 export interface Effect {
-    type: 'glow' | 'outline' | 'shadow' | 'blur' | 'sepia' | 'grayscale';
+    type: 'glow' | 'outline' | 'shadow' | 'blur' | 'sepia' | 'grayscale' | 'pulse' | 'float' | 'hue-rotate' | 'brightness' | 'contrast' | 'invert';
     color?: string;
     width?: number; // Spread or thickness
     blur?: number;
     opacity?: number;
+    intensity?: number; // For animations like shake/pulse
 }
 
 export interface CodeStep {

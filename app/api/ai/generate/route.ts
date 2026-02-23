@@ -61,7 +61,7 @@ export async function POST(req: NextRequest) {
             INSTRUCTIONS FOR TACHIE (CHARACTER):
             1. You MUST generate a "tachieConfigs" object in the JSON root.
             2. "tachieConfigs" is a map: { [characterName: string]: { [emotion: string]: string[], "mouthOpen": string[], "mouthClosed": string[] } }.
-            3. For EACH character used in the script, define their layer sets for "neutral", "happy", "sad", "surprised", "serious".
+            3. Define layer sets for emotions like "neutral", "happy", "sad", "surprised", "serious". You MAY also define custom emotions (e.g., "thinking", "pointing") as needed.
             4. Define "mouthOpen" (e.g., layers with "口", "あ", "開") and "mouthClosed" (e.g., layers with "口", "ん", "閉").
             5. The "neutral"/"happy"/etc. sets should generally include a default "closed" mouth layer.
             6. Use total layer paths from the provided list for each character.
@@ -98,13 +98,33 @@ export async function POST(req: NextRequest) {
                   "codeBlocks": [
                     { "code": "code snippet", "fileName": "App.tsx", "language": "tsx" }
                   ],
-                  "previewContent": "HTML content for demo (if relevant)",
-                  "previewLayout": "split" | "overlay",
+                  "overlays": [ // EXTRA CLIPS for creativity
+                    {
+                      "type": "shape" | "icon" | "text" | "image",
+                      "content": "rect" | "circle" | "lucide:star" | "Extra text" | "URL",
+                      "layer": "background" | "foreground",
+                      "x": number, "y": number, "width": number, "height": number,
+                      "animation": { "type": string, "duration": number },
+                      "keyframes": {
+                         "x": [{ "frame": number, "value": number, "easing": "linear" | "ease-in" | "ease-out" | "ease-in-out" }],
+                         "y": [{ "frame": number, "value": number }],
+                         "opacity": [{ "frame": number, "value": number }],
+                         "scale": [{ "frame": number, "value": number }],
+                         "rotate": [{ "frame": number, "value": number }]
+                      },
+                      "effects": [{ "type": string, "color": "#hex", "intensity": 1 }],
+                      "style": { "backgroundColor": "#hex", "color": "#hex", "borderRadius": "50%", "opacity": 0.8 }
+                    }
+                  ],
+                  "keyframes": { // Apply to character's movement
+                     "x": [{ "frame": number, "value": number }],
+                     "y": [{ "frame": number, "value": number }]
+                  },
                   "visualDescription": "Brief description",
                   "position": "left" | "right" | "center",
-                  "mirror": boolean, // Set to true to flip character horizontally (useful to make them face center)
+                  "mirror": boolean, 
                   "effects": [
-                    { "type": "glow" | "outline" | "shadow" | "blur", "color": "#ff0000", "width": 5, "blur": 10 }
+                    { "type": "glow" | "outline" | "pulse" | "float", "color": "#ff0000" }
                   ]
                 }
               ]
@@ -114,11 +134,17 @@ export async function POST(req: NextRequest) {
             Language: Use the same language as the User Request (default to Japanese).
             Tone: STRICTLY FOLLOW the tone of the User Request.
 
-            EFFECTS GUIDE:
-            - Use "glow" to emphasize a character or important element.
-            - Use "outline" for visibility.
-            - Use "shadow" for depth.
-            - Apply effects sparingly to enhance the atmosphere requested by the user.
+             ANIMATIONS: fade, pop, slideUp, slideDown, slideLeft, slideRight, spin, shake, bounce.
+             EFFECTS: glow, outline, shadow, blur, sepia, grayscale, pulse, float, hue-rotate, brightness, contrast, invert.
+
+             CREATIVITY GUIDE:
+             1. KEYFRAMES: For advanced movement, use "keyframes". 
+                - Example: Move character from left to right: "x": [{frame:0, value:50}, {frame:60, value:800}].
+                - You can combine multiple properties (x, y, opacity, scale, rotate).
+             2. SHAPES (Circle/Box): Use "type": "shape" with "content": "circle" or "rect". 
+             3. ICONS: Use "type": "icon" with "content": "lucide:NAME".
+             4. EMOTION: Use "shake" when character is angry, "bounce" when happy, "pulse" for important points.
+             5. OVERLAYS: Use them for decorative background elements or floating foreground info.
 
             IMPORTANT: Return ONLY valid JSON.`;
 
@@ -420,9 +446,10 @@ export async function POST(req: NextRequest) {
                     audioUrl: audioUrl,
                     mouthOpenLayers,
                     mouthClosedLayers,
+                    mandatoryLayers: scene.mandatoryLayers || targetCharacter?.rules?.mandatory || [],
                     facing: targetCharacter?.facing || 'right',
                     mirror: scene.mirror || false,
-                    mandatoryLayers: targetCharacter?.rules?.mandatory || [],
+                    keyframes: scene.keyframes || {},
                     animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
                 });
             }
@@ -432,6 +459,29 @@ export async function POST(req: NextRequest) {
             const hasPreview = !!scene.previewContent;
             const previewLayout = scene.previewLayout || 'split';
             const isOverlay = previewLayout === 'overlay';
+
+            // 4. Handle Overlays (AI-driven extra clips)
+            if (scene.overlays && Array.isArray(scene.overlays)) {
+                scene.overlays.forEach((ov: any, idx: number) => {
+                    const trackId = ov.layer === 'foreground' ? 1 : 4; // 1 is foreground (above all), 4 is background
+                    clips.push({
+                        id: `ov-${i}-${idx}`,
+                        type: ov.type || 'shape',
+                        trackId: trackId,
+                        startFrame: currentFrame,
+                        durationInFrames: totalSceneFrames,
+                        content: ov.content,
+                        x: ov.x ?? 100,
+                        y: ov.y ?? 100,
+                        width: ov.width ?? 200,
+                        height: ov.height ?? 200,
+                        style: ov.style || {},
+                        animation: ov.animation || { type: 'fade', duration: 15 },
+                        effects: ov.effects || [],
+                        keyframes: ov.keyframes || {}
+                    });
+                });
+            }
             const previewDelay = Math.max(0, Math.min(1, scene.previewDelay || 0));
 
             if (hasCode) {
