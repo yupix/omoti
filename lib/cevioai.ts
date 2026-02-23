@@ -15,17 +15,25 @@ export const getCevioaiSpeakers = async (baseUrl: string): Promise<CevioaiSpeake
     }
 };
 
+export interface SynthesizeResponse {
+    url: string;
+    duration: number;
+    filename: string;
+}
+
 export const synthesizeCevioai = async (
     baseUrl: string,
     text: string,
     cast: string,
     options: { speed?: number; tone?: number; alpha?: number; volume?: number } = {}
-) => {
+): Promise<SynthesizeResponse | null> => {
     try {
-        const res = await fetch(`${baseUrl}/synthesize`, {
+        const res = await fetch('/api/synthesize', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                provider: 'cevioai',
+                baseUrl,
                 text,
                 cast,
                 ...options

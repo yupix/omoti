@@ -25,7 +25,7 @@ export const getVoicevoxSpeakers = async (baseUrl: string): Promise<VoicevoxSpea
     }
 };
 
-export const synthesizeVoicevox = async (baseUrl: string, text: string, speakerId: number): Promise<{ url: string } | null> => {
+export const synthesizeVoicevox = async (baseUrl: string, text: string, speakerId: number): Promise<{ url: string; duration: number } | null> => {
     try {
         const res = await fetch('/api/synthesize', {
             method: 'POST',
@@ -39,7 +39,7 @@ export const synthesizeVoicevox = async (baseUrl: string, text: string, speakerI
         });
         if (!res.ok) throw new Error('VOICEVOX Synthesis failed');
         const data = await res.json();
-        return { url: data.url };
+        return { url: data.url, duration: data.duration };
     } catch (err) {
         console.error('VOICEVOX Synthesis error:', err);
         return null;

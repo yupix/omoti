@@ -590,13 +590,9 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                         } else {
                                                             const result = await synthesizeVoicevox(voicevoxBaseUrl, selectedClip.content, selectedVoicevoxStyle);
                                                             if (result) {
-                                                                // Use HTMLAudioElement to get duration for VOICEVOX blob
-                                                                const audio = new Audio(result.url);
-                                                                audio.onloadedmetadata = () => {
-                                                                    const duration = audio.duration || 3;
-                                                                    handleUpdateClip('durationInFrames', Math.ceil(duration * 30));
-                                                                    addClip('audio', result.url, duration);
-                                                                };
+                                                                const audioDuration = result.duration || 3;
+                                                                handleUpdateClip('durationInFrames', Math.ceil(audioDuration * 30));
+                                                                addClip('audio', result.url, audioDuration);
                                                             } else {
                                                                 alert('VOICEVOX Synthesis failed. Is the server running?');
                                                             }
