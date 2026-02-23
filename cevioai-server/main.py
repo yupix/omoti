@@ -13,6 +13,9 @@ app = FastAPI()
 UPLOAD_DIR = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))), "public", "uploads")
 os.makedirs(UPLOAD_DIR, exist_ok=True)
 
+# Mount static files to serve the generated audio
+app.mount("/uploads", StaticFiles(directory=UPLOAD_DIR), name="uploads")
+
 # Start Cevio AI Host if not started
 try:
     if not ServiceControl2.is_host_started():
