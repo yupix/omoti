@@ -87,6 +87,10 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     let opacity = 1;
     let transformString = `rotate(${clip.rotate || 0}deg)`;
 
+    if (clip.mirror) {
+        transformString += ' scaleX(-1)';
+    }
+
     if (clip.animation?.type === 'fade') {
         const animDuration = Math.max(1, clip.animation.duration || 10);
         const fadeIn = interpolate(frame, [0, animDuration], [0, 1], { extrapolateRight: 'clamp' });

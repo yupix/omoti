@@ -77,7 +77,7 @@ export default function Editor() {
     const [availableLayers, setAvailableLayers] = useState<string[]>([]);
     const [collapsedPaths, setCollapsedPaths] = useState<Set<string>>(new Set());
     const [pathsWithChildren, setPathsWithChildren] = useState<Set<string>>(new Set());
-    const [tachiePresets, setTachiePresets] = useState<{ id: string; name: string; assetUrl: string; layers: string[] }[]>([]);
+    const [tachiePresets, setTachiePresets] = useState<{ id: string; name: string; assetUrl: string; layers: string[]; facing?: 'left' | 'right' }[]>([]);
     const [aiVoicePresets, setAiVoicePresets] = useState<string[]>([]);
     const [selectedAiVoicePreset, setSelectedAiVoicePreset] = useState<string>('');
 
@@ -188,8 +188,8 @@ export default function Editor() {
             // Seed default presets if empty
             const psdUrl = '/uploads/1770692241459-_____SD___.psd';
             setTachiePresets([
-                { id: 'p-akane', name: 'a (琴乃茜)', assetUrl: psdUrl, layers: [] },
-                { id: 'p-aoi', name: 'aoi (葵)', assetUrl: psdUrl, layers: [] }
+                { id: 'p-akane', name: 'a (琴乃茜)', assetUrl: psdUrl, layers: [], facing: 'right' },
+                { id: 'p-aoi', name: 'aoi (葵)', assetUrl: psdUrl, layers: [], facing: 'right' }
             ]);
         }
     }, []);
@@ -651,6 +651,8 @@ export default function Editor() {
             edges: type === 'flow' ? [
                 { id: 'e1-2', source: '1', target: '2' },
             ] : undefined,
+            facing: type === 'tachie' ? 'right' : undefined,
+            mirror: false,
         };
         setClips(prev => [...prev, newClip]);
         setSelectedClipId(newClip.id);

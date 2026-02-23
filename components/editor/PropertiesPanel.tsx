@@ -27,8 +27,8 @@ interface PropertiesPanelProps {
     handleUpdateAnimation: (key: string, value: any) => void;
     removeClip: () => void;
     addClip: (type: ClipType, contentOverride?: string, durationOverride?: number) => void;
-    tachiePresets: { id: string; name: string; assetUrl: string; layers: string[] }[];
-    setTachiePresets: (presets: { id: string; name: string; assetUrl: string; layers: string[] }[]) => void;
+    tachiePresets: { id: string; name: string; assetUrl: string; layers: string[]; facing?: 'left' | 'right' }[];
+    setTachiePresets: (presets: { id: string; name: string; assetUrl: string; layers: string[]; facing?: 'left' | 'right' }[]) => void;
     availableLayers: string[];
     collapsedPaths: Set<string>;
     setCollapsedPaths: (paths: Set<string>) => void;
@@ -338,7 +338,8 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                             id: Math.random().toString(36).substr(2, 9),
                                                             name,
                                                             assetUrl: selectedClip.content,
-                                                            layers: selectedClip.tachieLayers || []
+                                                            layers: selectedClip.tachieLayers || [],
+                                                            facing: selectedClip.facing || 'right'
                                                         };
                                                         setTachiePresets([...tachiePresets, newPreset]);
                                                     }}
@@ -354,9 +355,9 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                         <div key={preset.id} className="relative group">
                                                             <Button
                                                                 size="sm" variant="secondary" className="h-6 px-3 text-[10px] bg-primary/10 hover:bg-primary/20 border-primary/20 transition-colors"
-                                                                onClick={() => handleUpdateClip('tachieLayers', preset.layers)}
+                                                                onClick={() => handleBatchUpdateClip({ tachieLayers: preset.layers, facing: preset.facing || 'right' })}
                                                             >
-                                                                {preset.name}
+                                                                {preset.name} {preset.facing === 'left' ? '←' : '→'}
                                                             </Button>
                                                             <button
                                                                 className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full size-3 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity"
@@ -370,6 +371,37 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                         </div>
                                                     ))
                                                 )}
+                                            </div>
+                                        </div>
+
+                                        <div className="space-y-2">
+                                            <Label className="text-[10px] uppercase text-muted-foreground">Layout & Orientation</Label>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <div className="space-y-1">
+                                                    <Label className="text-[9px] text-muted-foreground">Facing (Asset)</Label>
+                                                    <Select
+                                                        value={selectedClip.facing || 'right'}
+                                                        onValueChange={(val: 'left' | 'right') => handleUpdateClip('facing', val)}
+                                                    >
+                                                        <SelectTrigger className="h-7 text-[10px]">
+                                                            <SelectValue />
+                                                        </SelectTrigger>
+                                                        <SelectContent>
+                                                            <SelectItem value="left" className="text-[10px]">Left (←)</SelectItem>
+                                                            <SelectItem value="right" className="text-[10px]">Right (→)</SelectItem>
+                                                        </SelectContent>
+                                                    </Select>
+                                                </div>
+                                                <div className="space-y-1">
+                                                    <Label className="text-[9px] text-muted-foreground">Mirror</Label>
+                                                    <Button
+                                                        variant={selectedClip.mirror ? 'default' : 'outline'}
+                                                        size="sm" className="h-7 w-full text-[10px]"
+                                                        onClick={() => handleUpdateClip('mirror', !selectedClip.mirror)}
+                                                    >
+                                                        {selectedClip.mirror ? 'Mirrored' : 'Normal'}
+                                                    </Button>
+                                                </div>
                                             </div>
                                         </div>
 

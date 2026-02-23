@@ -32,7 +32,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
             voicevoxStyle?: number,
             aivoicePreset: string,
             cevioaiSpeaker: string
-        }
+        },
+        facing?: 'left' | 'right'
     }[]>([]);
     const [configTachie, setConfigTachie] = useState<string | null>(null);
     const [configTachieTabs, setConfigTachieTabs] = useState<'layers' | 'voice'>('layers');
@@ -186,7 +187,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                     voicevoxStyle: undefined,
                     aivoicePreset: '',
                     cevioaiSpeaker: ''
-                }
+                },
+                facing: 'right' as const
             }];
             // Try auto-configure for new characters if they look like they need it
             return newData;
@@ -220,7 +222,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                         layers: t.layers,
                         url: t.url,
                         rules: t.rules,
-                        voice: t.voice
+                        voice: t.voice,
+                        facing: (t.facing || 'right') as 'left' | 'right'
                     }))
                 })
             });
@@ -373,7 +376,20 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                             >
                                                 <Sparkles size={10} /> Auto-Detect
                                             </Button>
-
+                                            <div className="flex bg-secondary/20 rounded h-6 p-0.5 ml-auto">
+                                                <button
+                                                    className={`px-2 text-[8px] font-bold rounded-sm transition-all ${data.facing === 'left' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                    onClick={() => updateTachieInfo(data.id, 'facing', 'left')}
+                                                >
+                                                    Left (←)
+                                                </button>
+                                                <button
+                                                    className={`px-2 text-[8px] font-bold rounded-sm transition-all ${data.facing !== 'left' ? 'bg-primary text-primary-foreground shadow-sm' : 'text-muted-foreground hover:text-foreground'}`}
+                                                    onClick={() => updateTachieInfo(data.id, 'facing', 'right')}
+                                                >
+                                                    Right (→)
+                                                </button>
+                                            </div>
                                         </div>
                                     </div>
                                 </div>

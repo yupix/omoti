@@ -48,6 +48,7 @@ export async function POST(req: NextRequest) {
             ${tachies.map((t: any) => `
             - Character Name: "${t.name}"
               Role/Personality: "${t.role || 'General assistant'}"
+              Asset Facing: "${t.facing || 'right'}" (The character is facing ${t.facing || 'right'} in the PSD)
               Layers: ${JSON.stringify(t.layers)}
               ${t.rules ? `
               LAYER RULES:
@@ -101,6 +102,7 @@ export async function POST(req: NextRequest) {
                   "previewLayout": "split" | "overlay",
                   "visualDescription": "Brief description",
                   "position": "left" | "right" | "center",
+                  "mirror": boolean, // Set to true to flip character horizontally (useful to make them face center)
                   "effects": [
                     { "type": "glow" | "outline" | "shadow" | "blur", "color": "#ff0000", "width": 5, "blur": 10 }
                   ]
@@ -418,6 +420,8 @@ export async function POST(req: NextRequest) {
                     audioUrl: audioUrl,
                     mouthOpenLayers,
                     mouthClosedLayers,
+                    facing: targetCharacter?.facing || 'right',
+                    mirror: scene.mirror || false,
                     mandatoryLayers: targetCharacter?.rules?.mandatory || [],
                     animation: (i === 0 || sceneCharacterName !== scriptData.scenes[i - 1]?.character) ? { type: 'slide', duration: 20 } : { type: 'none', duration: 0 }
                 });

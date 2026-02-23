@@ -39,6 +39,8 @@ export interface Clip {
     mouthOpenLayers?: string[]; // Layers to show when mouth is open
     mouthClosedLayers?: string[]; // Layers to show when mouth is closed
     mandatoryLayers?: string[]; // Layers that are always visible
+    facing?: 'left' | 'right'; // Semantic direction the character is facing in the asset
+    mirror?: boolean; // Whether to flip the clip horizontally
 }
 
 export interface Effect {
