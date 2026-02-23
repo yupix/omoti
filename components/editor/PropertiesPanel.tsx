@@ -36,12 +36,17 @@ interface PropertiesPanelProps {
     aiVoicePresets: string[];
     selectedAiVoicePreset: string;
     setSelectedAiVoicePreset: (val: string) => void;
-    synthProvider: 'aivoice' | 'voicevox';
-    setSynthProvider: (val: 'aivoice' | 'voicevox') => void;
+    cevioaiSpeakers: any[];
+    selectedCevioaiSpeaker: string;
+    setSelectedCevioaiSpeaker: (val: string) => void;
+    synthProvider: 'aivoice' | 'voicevox' | 'cevioai';
+    setSynthProvider: (val: 'aivoice' | 'voicevox' | 'cevioai') => void;
     aivoiceBaseUrl: string;
     setAivoiceBaseUrl: (val: string) => void;
     voicevoxBaseUrl: string;
     setVoicevoxBaseUrl: (val: string) => void;
+    cevioaiBaseUrl: string;
+    setCevioaiBaseUrl: (val: string) => void;
     voicevoxSpeakers: VoicevoxSpeaker[];
     selectedVoicevoxSpeaker: string;
     setSelectedVoicevoxSpeaker: (val: string) => void;
@@ -73,12 +78,17 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
     aiVoicePresets,
     selectedAiVoicePreset,
     setSelectedAiVoicePreset,
+    cevioaiSpeakers,
+    selectedCevioaiSpeaker,
+    setSelectedCevioaiSpeaker,
     synthProvider,
     setSynthProvider,
     aivoiceBaseUrl,
     setAivoiceBaseUrl,
     voicevoxBaseUrl,
     setVoicevoxBaseUrl,
+    cevioaiBaseUrl,
+    setCevioaiBaseUrl,
     voicevoxSpeakers,
     selectedVoicevoxSpeaker,
     setSelectedVoicevoxSpeaker,
@@ -451,23 +461,10 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                         <div className="pt-2 border-t border-border/50 space-y-3">
                                             <div className="space-y-2">
                                                 <Label className="text-[10px] uppercase text-muted-foreground">{t('editor.properties.voiceSynthesizer') || 'Voice Synthesizer'}</Label>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <Button
-                                                        variant={synthProvider === 'aivoice' ? 'default' : 'outline'}
-                                                        size="sm"
-                                                        className="h-7 text-[10px]"
-                                                        onClick={() => setSynthProvider('aivoice')}
-                                                    >
-                                                        AIVOICE
-                                                    </Button>
-                                                    <Button
-                                                        variant={synthProvider === 'voicevox' ? 'default' : 'outline'}
-                                                        size="sm"
-                                                        className="h-7 text-[10px]"
-                                                        onClick={() => setSynthProvider('voicevox')}
-                                                    >
-                                                        VOICEVOX
-                                                    </Button>
+                                                <div className="grid grid-cols-3 gap-1">
+                                                    <Button variant={synthProvider === 'aivoice' ? 'default' : 'outline'} size="sm" className="h-7 text-[9px] px-1" onClick={() => setSynthProvider('aivoice')}>AIVOICE</Button>
+                                                    <Button variant={synthProvider === 'voicevox' ? 'default' : 'outline'} size="sm" className="h-7 text-[9px] px-1" onClick={() => setSynthProvider('voicevox')}>VOICEVOX</Button>
+                                                    <Button variant={synthProvider === 'cevioai' ? 'default' : 'outline'} size="sm" className="h-7 text-[8px] px-1" onClick={() => setSynthProvider('cevioai')}>CeVIO AI</Button>
                                                 </div>
                                             </div>
 
@@ -493,6 +490,31 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                             onChange={e => setAivoiceBaseUrl(e.target.value)}
                                                             className="h-8 text-xs bg-background font-mono"
                                                             placeholder="http://localhost:8000"
+                                                        />
+                                                    </div>
+                                                </div>
+                                            ) : synthProvider === 'cevioai' ? (
+                                                <div className="space-y-3">
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Cast</Label>
+                                                        <Select value={selectedCevioaiSpeaker} onValueChange={setSelectedCevioaiSpeaker}>
+                                                            <SelectTrigger className="h-8 text-xs bg-background">
+                                                                <SelectValue placeholder="Select cast" />
+                                                            </SelectTrigger>
+                                                            <SelectContent>
+                                                                {cevioaiSpeakers.map(s => (
+                                                                    <SelectItem key={s.speaker_uuid} value={s.speaker_uuid} className="text-xs">{s.name}</SelectItem>
+                                                                ))}
+                                                            </SelectContent>
+                                                        </Select>
+                                                    </div>
+                                                    <div className="space-y-1">
+                                                        <Label className="text-[10px] uppercase text-muted-foreground">Server URL</Label>
+                                                        <Input
+                                                            value={cevioaiBaseUrl}
+                                                            onChange={e => setCevioaiBaseUrl(e.target.value)}
+                                                            className="h-8 text-xs bg-background font-mono"
+                                                            placeholder="http://localhost:8001"
                                                         />
                                                     </div>
                                                 </div>
@@ -541,10 +563,11 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
 
                                             <Button
                                                 size="sm"
-                                                disabled={isSynthesizing || (synthProvider === 'aivoice' ? !aiVoicePresets.length : !voicevoxSpeakers.length)}
+                                                disabled={isSynthesizing || (synthProvider === 'aivoice' ? !aiVoicePresets.length : synthProvider === 'cevioai' ? !cevioaiSpeakers.length : !voicevoxSpeakers.length)}
                                                 className="w-full h-8 text-[10px] gap-2 mt-2"
                                                 onClick={async () => {
                                                     try {
+                                                        const { synthesizeCevioai } = await import('@/lib/cevioai');
                                                         setIsSynthesizing(true);
                                                         if (synthProvider === 'aivoice') {
                                                             const result = await synthesizeVoice(aivoiceBaseUrl, selectedClip.content, selectedAiVoicePreset);
@@ -555,16 +578,21 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                                             } else {
                                                                 alert('AIVOICE Synthesis failed. Is the server running?');
                                                             }
+                                                        } else if (synthProvider === 'cevioai') {
+                                                            const result = await synthesizeCevioai(cevioaiBaseUrl, selectedClip.content, selectedCevioaiSpeaker);
+                                                            if (result) {
+                                                                const audioDuration = result.duration || 2;
+                                                                handleUpdateClip('durationInFrames', Math.ceil(audioDuration * 30));
+                                                                addClip('audio', result.url, audioDuration);
+                                                            } else {
+                                                                alert('CeVIO AI Synthesis failed. Is the server running?');
+                                                            }
                                                         } else {
                                                             const result = await synthesizeVoicevox(voicevoxBaseUrl, selectedClip.content, selectedVoicevoxStyle);
                                                             if (result) {
-                                                                // Use HTMLAudioElement to get duration for VOICEVOX blob
-                                                                const audio = new Audio(result.url);
-                                                                audio.onloadedmetadata = () => {
-                                                                    const duration = audio.duration || 3;
-                                                                    handleUpdateClip('durationInFrames', Math.ceil(duration * 30));
-                                                                    addClip('audio', result.url, duration);
-                                                                };
+                                                                const audioDuration = result.duration || 3;
+                                                                handleUpdateClip('durationInFrames', Math.ceil(audioDuration * 30));
+                                                                addClip('audio', result.url, audioDuration);
                                                             } else {
                                                                 alert('VOICEVOX Synthesis failed. Is the server running?');
                                                             }

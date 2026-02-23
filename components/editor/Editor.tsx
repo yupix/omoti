@@ -52,8 +52,10 @@ export default function Editor() {
                 if (parsed.synthProvider) setSynthProvider(parsed.synthProvider);
                 if (parsed.aivoiceBaseUrl) setAivoiceBaseUrl(parsed.aivoiceBaseUrl);
                 if (parsed.voicevoxBaseUrl) setVoicevoxBaseUrl(parsed.voicevoxBaseUrl);
+                if (parsed.cevioaiBaseUrl) setCevioaiBaseUrl(parsed.cevioaiBaseUrl);
                 if (parsed.selectedVoicevoxSpeaker) setSelectedVoicevoxSpeaker(parsed.selectedVoicevoxSpeaker);
                 if (parsed.selectedVoicevoxStyle !== undefined) setSelectedVoicevoxStyle(parsed.selectedVoicevoxStyle);
+                if (parsed.selectedCevioaiSpeaker) setSelectedCevioaiSpeaker(parsed.selectedCevioaiSpeaker);
             } catch (e) {
                 console.error('Failed to load saved state', e);
             }
@@ -80,12 +82,15 @@ export default function Editor() {
     const [selectedAiVoicePreset, setSelectedAiVoicePreset] = useState<string>('');
 
     // Synth Settings
-    const [synthProvider, setSynthProvider] = useState<'aivoice' | 'voicevox'>('aivoice');
+    const [synthProvider, setSynthProvider] = useState<'aivoice' | 'voicevox' | 'cevioai'>('aivoice');
     const [aivoiceBaseUrl, setAivoiceBaseUrl] = useState('http://localhost:8000');
     const [voicevoxBaseUrl, setVoicevoxBaseUrl] = useState('http://localhost:50021');
+    const [cevioaiBaseUrl, setCevioaiBaseUrl] = useState('http://localhost:8001');
     const [voicevoxSpeakers, setVoicevoxSpeakers] = useState<VoicevoxSpeaker[]>([]);
+    const [cevioaiSpeakers, setCevioaiSpeakers] = useState<any[]>([]);
     const [selectedVoicevoxSpeaker, setSelectedVoicevoxSpeaker] = useState<string>('');
     const [selectedVoicevoxStyle, setSelectedVoicevoxStyle] = useState<number>(0);
+    const [selectedCevioaiSpeaker, setSelectedCevioaiSpeaker] = useState<string>('');
 
     const [isSynthesizing, setIsSynthesizing] = useState(false);
     const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
@@ -109,8 +114,10 @@ export default function Editor() {
             synthProvider,
             aivoiceBaseUrl,
             voicevoxBaseUrl,
+            cevioaiBaseUrl,
             selectedVoicevoxSpeaker,
-            selectedVoicevoxStyle
+            selectedVoicevoxStyle,
+            selectedCevioaiSpeaker
         }));
     }, [tracks, clips, primaryColor, assets, assetFolders, isLoaded, synthProvider, aivoiceBaseUrl, voicevoxBaseUrl, selectedVoicevoxSpeaker, selectedVoicevoxStyle]);
 
@@ -202,6 +209,17 @@ export default function Editor() {
                     setAiVoicePresets(presets);
                     if (presets.length > 0 && !selectedAiVoicePreset) setSelectedAiVoicePreset(presets[0]);
                 });
+            } else if (synthProvider === 'cevioai') {
+                if (!cevioaiBaseUrl) return;
+                const { getCevioaiSpeakers } = require('@/lib/cevioai');
+                setCevioaiSpeakers([]);
+                getCevioaiSpeakers(cevioaiBaseUrl).then((speakers: any) => {
+                    setCevioaiSpeakers(speakers);
+                    if (speakers.length > 0) {
+                        const exists = speakers.some((s: any) => s.speaker_uuid === selectedCevioaiSpeaker);
+                        if (!exists) setSelectedCevioaiSpeaker(speakers[0].speaker_uuid);
+                    }
+                });
             } else {
                 if (!voicevoxBaseUrl) return;
                 setVoicevoxSpeakers([]); // Clear current
@@ -220,7 +238,7 @@ export default function Editor() {
         }, 500); // 500ms debounce
 
         return () => clearTimeout(timer);
-    }, [synthProvider, aivoiceBaseUrl, voicevoxBaseUrl, selectedVoicevoxSpeaker, selectedAiVoicePreset]);
+    }, [synthProvider, aivoiceBaseUrl, voicevoxBaseUrl, cevioaiBaseUrl, selectedVoicevoxSpeaker, selectedAiVoicePreset, selectedCevioaiSpeaker]);
 
     // Exit fullscreen on Escape
     useEffect(() => {
@@ -1223,12 +1241,17 @@ export default function Editor() {
                                     aiVoicePresets={aiVoicePresets}
                                     selectedAiVoicePreset={selectedAiVoicePreset}
                                     setSelectedAiVoicePreset={setSelectedAiVoicePreset}
+                                    cevioaiSpeakers={cevioaiSpeakers}
+                                    selectedCevioaiSpeaker={selectedCevioaiSpeaker}
+                                    setSelectedCevioaiSpeaker={setSelectedCevioaiSpeaker}
                                     synthProvider={synthProvider}
                                     setSynthProvider={setSynthProvider}
                                     aivoiceBaseUrl={aivoiceBaseUrl}
                                     setAivoiceBaseUrl={setAivoiceBaseUrl}
                                     voicevoxBaseUrl={voicevoxBaseUrl}
                                     setVoicevoxBaseUrl={setVoicevoxBaseUrl}
+                                    cevioaiBaseUrl={cevioaiBaseUrl}
+                                    setCevioaiBaseUrl={setCevioaiBaseUrl}
                                     voicevoxSpeakers={voicevoxSpeakers}
                                     selectedVoicevoxSpeaker={selectedVoicevoxSpeaker}
                                     setSelectedVoicevoxSpeaker={setSelectedVoicevoxSpeaker}

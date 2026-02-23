@@ -18,6 +18,7 @@ const ScriptSchema = z.object({
 // AIVOICE Server URL
 const AIVOICE_SERVER = 'http://localhost:8000';
 const VOICEVOX_SERVER = 'http://127.0.0.1:50021';
+const CEVIOAI_SERVER = 'http://localhost:8001';
 
 // Simple WAV duration calculator
 function getWavDuration(buffer: Buffer): number {
@@ -236,6 +237,19 @@ export async function POST(req: NextRequest) {
                         headers: { 'Content-Type': 'application/json' },
                         body: JSON.stringify({ text: scene.text, preset: charVoice.aivoicePreset }),
                         signal: AbortSignal.timeout(5000)
+                    }).catch(() => null);
+
+                    if (ttsRes && ttsRes.ok) {
+                        const ttsData = await ttsRes.json();
+                        audioUrl = ttsData.url;
+                        duration = Number(ttsData.duration) || duration;
+                    }
+                } else if (charVoice?.provider === 'cevioai') {
+                    const ttsRes = await fetch(`${CEVIOAI_SERVER}/synthesize`, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ text: scene.text, cast: charVoice.cevioaiSpeaker }),
+                        signal: AbortSignal.timeout(10000)
                     }).catch(() => null);
 
                     if (ttsRes && ttsRes.ok) {

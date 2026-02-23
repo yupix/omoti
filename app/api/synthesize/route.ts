@@ -31,6 +31,23 @@ export async function POST(req: NextRequest) {
             if (!audioRes.ok) throw new Error('Failed to download audio from AIVOICE');
             audioBuffer = Buffer.from(await audioRes.arrayBuffer());
             duration = data.duration;
+        } else if (provider === 'cevioai') {
+            const res = await fetch(`${baseUrl}/synthesize`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text, cast: body.cast }),
+            });
+            if (!res.ok) throw new Error('CeVIO AI Synthesis failed');
+            const data = await res.json();
+
+            // CeVIO server returns a URL like /uploads/filename
+            // Since it's on the same machine/shared public folder in some setups, 
+            // but let's be robust and fetch it if it's a full URL or relative to its host
+            const audioUrl = data.url.startsWith('http') ? data.url : `${baseUrl}${data.url}`;
+            const audioRes = await fetch(audioUrl);
+            if (!audioRes.ok) throw new Error('Failed to download audio from CeVIO AI');
+            audioBuffer = Buffer.from(await audioRes.arrayBuffer());
+            duration = data.duration;
         } else {
             // VOICEVOX
             // 1. Audio Query
@@ -49,10 +66,14 @@ export async function POST(req: NextRequest) {
             if (!synthRes.ok) throw new Error('VOICEVOX Synthesis failed');
             audioBuffer = Buffer.from(await synthRes.arrayBuffer());
 
-            // We'll need to calculate duration if we want it accurately. 
-            // For now, let's return a placeholder or estimate if we can't easily get it.
-            // But we can return the buffer and let the client handle duration for now, 
-            // or use a library to parse wav header.
+            // Simple WAV duration calculator
+            try {
+                const byteRate = audioBuffer.readUInt32LE(28);
+                const dataSize = audioBuffer.readUInt32LE(40);
+                duration = dataSize / byteRate;
+            } catch (e) {
+                duration = 0;
+            }
         }
 
         const uploadDir = path.join(process.cwd(), 'public', 'uploads');
