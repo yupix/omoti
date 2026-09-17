@@ -66,23 +66,6 @@ export const INITIAL_CLIPS: Clip[] = [
         }
     },
     {
-        "id": "tachie-0",
-        "type": "tachie",
-        "trackId": 2,
-        "startFrame": 0,
-        "durationInFrames": 105,
-        "content": "/uploads/1770692241459-_____SD___.psd",
-        "title": "Akane",
-        "x": 50,
-        "y": 150,
-        "width": 600,
-        "height": 600,
-        "animation": {
-            "type": "slide",
-            "duration": 20
-        }
-    },
-    {
         "id": "sub-0",
         "type": "text",
         "trackId": 1,
@@ -123,23 +106,6 @@ export const INITIAL_CLIPS: Clip[] = [
         }
     },
     {
-        "id": "tachie-1",
-        "type": "tachie",
-        "trackId": 2,
-        "startFrame": 105,
-        "durationInFrames": 105,
-        "content": "/uploads/1770692241459-_____SD___.psd",
-        "title": "Akane",
-        "x": 50,
-        "y": 150,
-        "width": 600,
-        "height": 600,
-        "animation": {
-            "type": "none",
-            "duration": 0
-        }
-    },
-    {
         "id": "sub-1",
         "type": "text",
         "trackId": 1,
@@ -174,23 +140,6 @@ export const INITIAL_CLIPS: Clip[] = [
         "durationInFrames": 90,
         "content": "http://localhost:8000/static/audio/0abff431-b832-476b-897a-fe39a23240d0.wav",
         "title": "Voice 3",
-        "animation": {
-            "type": "none",
-            "duration": 0
-        }
-    },
-    {
-        "id": "tachie-2",
-        "type": "tachie",
-        "trackId": 2,
-        "startFrame": 210,
-        "durationInFrames": 105,
-        "content": "/uploads/1770692241459-_____SD___.psd",
-        "title": "Akane",
-        "x": 50,
-        "y": 150,
-        "width": 600,
-        "height": 600,
         "animation": {
             "type": "none",
             "duration": 0
@@ -261,23 +210,6 @@ export const INITIAL_CLIPS: Clip[] = [
         }
     },
     {
-        "id": "tachie-3",
-        "type": "tachie",
-        "trackId": 2,
-        "startFrame": 315,
-        "durationInFrames": 105,
-        "content": "/uploads/1770692241459-_____SD___.psd",
-        "title": "Akane",
-        "x": 50,
-        "y": 150,
-        "width": 600,
-        "height": 600,
-        "animation": {
-            "type": "none",
-            "duration": 0
-        }
-    },
-    {
         "id": "sub-3",
         "type": "text",
         "trackId": 1,
@@ -318,23 +250,6 @@ export const INITIAL_CLIPS: Clip[] = [
         }
     },
     {
-        "id": "tachie-4",
-        "type": "tachie",
-        "trackId": 2,
-        "startFrame": 420,
-        "durationInFrames": 105,
-        "content": "/uploads/1770692241459-_____SD___.psd",
-        "title": "Akane",
-        "x": 50,
-        "y": 150,
-        "width": 600,
-        "height": 600,
-        "animation": {
-            "type": "none",
-            "duration": 0
-        }
-    },
-    {
         "id": "sub-4",
         "type": "text",
         "trackId": 1,
@@ -369,23 +284,6 @@ export const INITIAL_CLIPS: Clip[] = [
         "durationInFrames": 90,
         "content": "http://localhost:8000/static/audio/f376f6bd-675d-4784-9f8a-157eef9f7f9d.wav",
         "title": "Voice 6",
-        "animation": {
-            "type": "none",
-            "duration": 0
-        }
-    },
-    {
-        "id": "tachie-5",
-        "type": "tachie",
-        "trackId": 2,
-        "startFrame": 525,
-        "durationInFrames": 105,
-        "content": "/uploads/1770692241459-_____SD___.psd",
-        "title": "Akane",
-        "x": 50,
-        "y": 150,
-        "width": 600,
-        "height": 600,
         "animation": {
             "type": "none",
             "duration": 0

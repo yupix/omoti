@@ -28,6 +28,19 @@ const HEADER_WIDTH = 192; // w-48 = 192px
 const RULER_HEIGHT = 32; // px
 const RESIZE_HANDLE_WIDTH = 6; // px
 
+// Only the playhead subscribes to playback; track contents change on edits.
+function TimelinePlayhead() {
+    const currentFrame = useEditorFrame();
+    return (
+        <div
+            className="absolute top-0 bottom-0 w-px bg-red-500 z-40 pointer-events-none"
+            style={{ left: HEADER_WIDTH + (currentFrame * FRAME_WIDTH) }}
+        >
+            <div className="size-2 bg-red-500 rounded-full -ml-[3.5px] mt-[12px]" />
+        </div>
+    );
+}
+
 enum DragType {
     MOVE,
     RESIZE_LEFT,
@@ -51,7 +64,15 @@ export const Timeline: React.FC<TimelineProps> = ({
     totalFrames,
 }) => {
     const { t } = useTranslation();
-    const currentFrame = useEditorFrame();
+    const clipsByTrack = React.useMemo(() => {
+        const grouped = new Map<number, Clip[]>();
+        for (const clip of clips) {
+            const lane = grouped.get(clip.trackId);
+            if (lane) lane.push(clip);
+            else grouped.set(clip.trackId, [clip]);
+        }
+        return grouped;
+    }, [clips]);
     const containerRef = useRef<HTMLDivElement>(null);
     const contentRef = useRef<HTMLDivElement>(null);
     const [dragState, setDragState] = useState<{ id: string; type: DragType; offset: number; initialStart: number; initialDuration: number } | null>(null);
@@ -244,13 +265,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                     </div>
 
                     {/* Playhead Line (Absolute overlay over entire timeline including ruler) */}
-                    <div
-                        className="absolute top-0 bottom-0 w-px bg-red-500 z-40 pointer-events-none"
-                        style={{ left: HEADER_WIDTH + (currentFrame * FRAME_WIDTH) }}
-                    >
-                        {/* Red Triangle/Dot at the top of the ruler */}
-                        <div className="size-2 bg-red-500 rounded-full -ml-[3.5px] mt-[12px]" />
-                    </div>
+                    <TimelinePlayhead />
 
                     {/* Tracks Container */}
                     <div className="flex flex-col relative" ref={contentRef}>
@@ -295,7 +310,7 @@ export const Timeline: React.FC<TimelineProps> = ({
                                     />
 
                                     {/* Clips */}
-                                    {clips.filter(c => c.trackId === track.id).map(clip => (
+                                    {(clipsByTrack.get(track.id) || []).map(clip => (
                                         <div
                                             key={clip.id}
                                             className={cn(

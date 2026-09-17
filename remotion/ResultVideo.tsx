@@ -1,5 +1,6 @@
 import { AbsoluteFill, Sequence, useCurrentFrame, Audio, Video, interpolate, spring, useVideoConfig, Img } from 'remotion';
 import { resolveAssetUrl } from './utils';
+import { getFadeOpacity, interpolateKeyframes } from './animations';
 import { Gif } from '@remotion/gif';
 import { Icon } from '@iconify/react';
 import React from 'react';
@@ -7,96 +8,23 @@ import { Clip } from '../types';
 import { CodeHighlighter } from '../components/CodeHighlighter';
 import { TachieRenderer } from './TachieRenderer';
 import { FlowRenderer } from './FlowRenderer';
-import { loadFont as loadNotoSansJP } from "@remotion/google-fonts/NotoSansJP";
-import { loadFont as loadNotoSerifJP } from "@remotion/google-fonts/NotoSerifJP";
-import { loadFont as loadZenKakuGothicNew } from "@remotion/google-fonts/ZenKakuGothicNew";
-import { loadFont as loadMPLUS1p } from "@remotion/google-fonts/MPLUS1p";
-import { loadFont as loadKaiseiTokumin } from "@remotion/google-fonts/KaiseiTokumin";
-import { loadFont as loadInter } from "@remotion/google-fonts/Inter";
-import { loadFont as loadRoboto } from "@remotion/google-fonts/Roboto";
-import { loadFont as loadMontserrat } from "@remotion/google-fonts/Montserrat";
-import { loadFont as loadPlayfairDisplay } from "@remotion/google-fonts/PlayfairDisplay";
-import { loadFont as loadOswald } from "@remotion/google-fonts/Oswald";
-import { loadFont as loadBebasNeue } from "@remotion/google-fonts/BebasNeue";
-import { Easing } from 'remotion';
-
-const interpolateKeyframes = (keyframes: any[] | undefined, frame: number, defaultValue: number) => {
-    if (!keyframes || keyframes.length === 0) return defaultValue;
-    if (keyframes.length === 1) return keyframes[0].value;
-
-    const sorted = [...keyframes].sort((a, b) => a.frame - b.frame);
-
-    if (frame <= sorted[0].frame) return sorted[0].value;
-    if (frame >= sorted[sorted.length - 1].frame) return sorted[sorted.length - 1].value;
-
-    for (let i = 0; i < sorted.length - 1; i++) {
-        const k1 = sorted[i];
-        const k2 = sorted[i + 1];
-        if (frame >= k1.frame && frame <= k2.frame) {
-            let easing = Easing.linear;
-            if (k1.easing === 'ease-in') easing = Easing.in(Easing.exp);
-            if (k1.easing === 'ease-out') easing = Easing.out(Easing.exp);
-            if (k1.easing === 'ease-in-out') easing = Easing.inOut(Easing.exp);
-
-            return interpolate(frame, [k1.frame, k2.frame], [k1.value, k2.value], {
-                extrapolateLeft: 'clamp',
-                extrapolateRight: 'clamp',
-                easing
-            });
-        }
-    }
-    return defaultValue;
-};
-import { loadFont as loadPermanentMarker } from "@remotion/google-fonts/PermanentMarker";
-
-// Preload fonts - Japanese fonts use default (no japanese subset in @remotion/google-fonts)
-loadNotoSansJP();
-loadNotoSerifJP();
-loadZenKakuGothicNew();
-loadMPLUS1p();
-loadKaiseiTokumin();
-// Latin fonts: specify weights/subsets to reduce bundle size
-loadInter('normal', { weights: ['400', '600', '700'], subsets: ['latin'] });
-loadRoboto('normal', { weights: ['400', '700'], subsets: ['latin'] });
-loadMontserrat('normal', { weights: ['400', '700'], subsets: ['latin'] });
-loadPlayfairDisplay('normal', { weights: ['400', '700'], subsets: ['latin'] });
-loadOswald('normal', { weights: ['400', '700'], subsets: ['latin'] });
-loadBebasNeue('normal', { weights: ['400'], subsets: ['latin'] });
-loadPermanentMarker('normal', { weights: ['400'], subsets: ['latin'] });
+import { FittedText } from './FittedText';
+import { loadClipFonts } from './fonts';
 
 const CodeClipRenderer: React.FC<{ clip: Clip }> = ({ clip }) => {
     const frame = useCurrentFrame();
-    const { fps } = useVideoConfig();
-
-    let displayCode = clip.content;
-
-    // Logic to determine which step is active
-    if (clip.steps && clip.steps.length > 0) {
-        const localFrame = frame; // Frame is already relative inside Sequence
-        // Find the last step that has frameOffset <= localFrame
-        const activeStep = [...clip.steps]
-            .sort((a, b) => a.frameOffset - b.frameOffset)
-            .reverse() // check from latest
-            .find(step => step.frameOffset <= localFrame);
-
-        if (activeStep) {
-            displayCode = activeStep.code;
-        } else {
-            // If before first step, maybe show first step or empty?
-            // Let's show the first step if we are before it, or just empty?
-            // Usually steps start at 0. If not, showing nothing or clip.content is safe.
-            // If we have steps, we probably want to prioritize them.
-            const firstStep = clip.steps.sort((a, b) => a.frameOffset - b.frameOffset)[0];
-            if (firstStep) displayCode = firstStep.code;
-        }
-    }
+    const steps = React.useMemo(() => [...(clip.steps || [])]
+        .sort((a, b) => a.frameOffset - b.frameOffset)
+        .reverse(), [clip.steps]);
+    const displayCode = steps.find(step => step.frameOffset <= frame)?.code
+        ?? steps.at(-1)?.code
+        ?? clip.content;
 
     return (
         <CodeHighlighter
             code={displayCode}
             language={clip.language || 'typescript'}
             theme="dark-plus"
-            transitionDuration={(clip.transitionDuration || 24) * (1000 / fps)}
         />
     );
 };
@@ -109,6 +37,7 @@ interface RenderClipProps {
 const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
+    const fontReady = React.useMemo(() => loadClipFonts(clip), [clip]);
 
     // Calculate Animation Styles
     const animType = clip.animation?.type || 'none';
@@ -142,9 +71,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     }
 
     if (animType === 'fade') {
-        const fadeIn = interpolate(frame, [0, animDuration], [0, 1], { extrapolateRight: 'clamp' });
-        const fadeOut = interpolate(frame, [Math.max(animDuration, clip.durationInFrames - animDuration), clip.durationInFrames], [1, 0], { extrapolateLeft: 'clamp', extrapolateRight: 'clamp' });
-        opacity *= (fadeIn * fadeOut);
+        opacity *= getFadeOpacity(frame, clip.durationInFrames, clip.animation?.duration);
     } else if (animType === 'pop') {
         const popScale = spring({ fps, frame, config: { damping: 10 } });
         transformString += ` scale(${currentScale * popScale})`;
@@ -194,8 +121,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     if (kfHueRotate > 0) filterString += ` hue-rotate(${kfHueRotate}deg)`;
     if (kfInvert > 0) filterString += ` invert(${kfInvert * 100}%)`;
 
-    let textShadowString = '';
-    let extraStyles: React.CSSProperties = {};
+    let textOutline: { color: string; width: number } | undefined;
 
     if (clip.effects && clip.effects.length > 0) {
         clip.effects.forEach(effect => {
@@ -208,15 +134,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
                 filterString += ` drop-shadow(0 0 ${blur}px ${color})`;
             } else if (effect.type === 'outline') {
                 if (clip.type === 'text') {
-                    const w = width;
-                    // Use 32 points for a truly circular and anti-aliased look
-                    // Adding a tiny 0.5px blur acts as anti-aliasing for the shadow layers
-                    for (let i = 0; i < 32; i++) {
-                        const angle = (i * 2 * Math.PI) / 32;
-                        const x = (Math.cos(angle) * w).toFixed(2);
-                        const y = (Math.sin(angle) * w).toFixed(2);
-                        textShadowString += `${x}px ${y}px 0.5px ${color}, `;
-                    }
+                    textOutline = { color, width };
                 } else {
                     filterString += ` drop-shadow(${width}px 0 0 ${color}) drop-shadow(-${width}px 0 0 ${color}) drop-shadow(0 ${width}px 0 ${color}) drop-shadow(0 -${width}px 0 ${color})`;
                 }
@@ -254,11 +172,9 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
 
     const effectsStyle: React.CSSProperties = {
         filter: filterString.trim() || undefined,
-        textShadow: textShadowString.replace(/, $/, '') || undefined,
-        ...extraStyles
     };
 
-    const finalStyle = { ...animationStyle, ...effectsStyle };
+    const finalStyle = { ...animationStyle, ...effectsStyle, transform: transformString };
 
     // Base positioning style
     const isPositioned = typeof clip.x === 'number' || typeof clip.y === 'number' || typeof clip.width === 'number' || typeof clip.height === 'number';
@@ -297,23 +213,11 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
 
     // Render text
     if (clip.type === 'text') {
-        const baseShadow = '0 4px 10px rgba(0,0,0,0.5)';
-        const effectShadow = effectsStyle.textShadow;
-        const combinedShadow = effectShadow ? `${effectShadow}, ${baseShadow}` : baseShadow;
+        const baseShadow = clip.style?.textShadow ?? '0 4px 10px rgba(0,0,0,0.5)';
 
         return (
             <div style={{ ...positionStyle, textShadow: undefined }}>
-                <h1 style={{
-                    fontFamily: 'sans-serif',
-                    fontSize: '80px',
-                    color: 'white',
-                    fontWeight: 800,
-                    margin: 0,
-                    ...clip.style,
-                    textShadow: combinedShadow,
-                }}>
-                    {clip.content}
-                </h1>
+                <FittedText fontReady={fontReady} text={clip.content} style={clip.style} shadow={baseShadow} outline={textOutline} />
             </div>
         );
     }
@@ -441,7 +345,7 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
         return (
             <div style={positionStyle}>
                 <div style={{ ...innerMediaStyle, display: 'flex', justifyContent: 'center', alignItems: 'center' }}>
-                    <TachieRenderer clip={clip} assetBaseUrl={assetBaseUrl} />
+                    <TachieRenderer key={`${assetBaseUrl || ''}:${clip.content}`} clip={clip} assetBaseUrl={assetBaseUrl} />
                 </div>
             </div>
         );

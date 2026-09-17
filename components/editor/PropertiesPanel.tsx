@@ -27,6 +27,7 @@ interface PropertiesPanelProps {
     handleUpdateAnimation: (key: string, value: any) => void;
     removeClip: () => void;
     addClip: (type: ClipType, contentOverride?: string, durationOverride?: number) => void;
+    tachieAssets: { name: string; url: string }[];
     tachiePresets: { id: string; name: string; assetUrl: string; layers: string[]; facing?: 'left' | 'right' }[];
     setTachiePresets: (presets: { id: string; name: string; assetUrl: string; layers: string[]; facing?: 'left' | 'right' }[]) => void;
     availableLayers: string[];
@@ -69,6 +70,7 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
     handleUpdateAnimation,
     removeClip,
     addClip,
+    tachieAssets,
     tachiePresets,
     setTachiePresets,
     availableLayers,
@@ -324,6 +326,27 @@ const PropertiesPanelInner: React.FC<PropertiesPanelProps> = ({
                                     </div>
                                 ) : selectedClip.type === 'tachie' ? (
                                     <div className="space-y-4">
+                                        <div className="space-y-2">
+                                            <Label htmlFor="tachie-source">{t('editor.properties.psdFile')}</Label>
+                                            <select
+                                                id="tachie-source"
+                                                className="w-full h-9 rounded-md border border-input bg-background px-2 text-xs"
+                                                value={selectedClip.content}
+                                                onChange={e => handleBatchUpdateClip({
+                                                    content: e.target.value,
+                                                    tachieLayers: [], mandatoryLayers: [],
+                                                    mouthOpenLayers: [], mouthClosedLayers: [],
+                                                })}
+                                            >
+                                                {!tachieAssets.some(asset => asset.url === selectedClip.content) && (
+                                                    <option value={selectedClip.content}>
+                                                        {t('editor.properties.currentPsd')}: {selectedClip.content.split('/').pop()}
+                                                    </option>
+                                                )}
+                                                {tachieAssets.map(asset => <option key={asset.url} value={asset.url}>{asset.name}</option>)}
+                                            </select>
+                                            <p className="text-xs text-muted-foreground">{t('editor.properties.psdHelp')}</p>
+                                        </div>
                                         <div className="space-y-2">
                                             <div className="flex items-center justify-between">
                                                 <Label className="text-[10px] uppercase text-muted-foreground flex items-center gap-1">

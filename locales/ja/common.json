@@ -10,6 +10,9 @@
             "playbackSpeed": "再生速度 (x)",
             "volume": "音量",
             "content": "コンテンツ",
+            "psdFile": "PSDファイル",
+            "currentPsd": "現在の参照",
+            "psdHelp": "素材からPSDをアップロードして、ここで選択してください。差し替えるとレイヤー選択と口パク設定がリセットされます。",
             "label": "ラベル",
             "value": "値",
             "language": "言語",
@@ -34,7 +37,12 @@
         "assets": {
             "upload": {
                 "title": "クリックしてアップロード",
-                "subtitle": "画像、動画、音声"
+                "subtitle": "画像、動画、音声、PSD",
+                "uploading": "アップロード中",
+                "saving": "送信完了・サーバーで保存中",
+                "processing": "ファイル情報を確認中",
+                "cancel": "中止",
+                "close": "閉じる"
             },
             "library": "ライブラリ",
             "empty": "素材がありません"
