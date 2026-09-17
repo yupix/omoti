@@ -1,39 +1,59 @@
-
 import { NextRequest, NextResponse } from 'next/server';
-import fs from 'fs';
-import path from 'path';
-import { writeFile } from 'fs/promises';
+import fs, { createWriteStream } from 'node:fs';
+import path from 'node:path';
+import { mkdir, rename, rm } from 'node:fs/promises';
+import { randomUUID } from 'node:crypto';
+import { Readable, Transform } from 'node:stream';
+import type { ReadableStream } from 'node:stream/web';
+import { pipeline } from 'node:stream/promises';
+import { MAX_UPLOAD_BYTES } from '@/lib/upload';
 
 export async function POST(req: NextRequest) {
+    const encodedName = req.headers.get('x-file-name');
+    if (!encodedName || !req.body) {
+        return NextResponse.json({ error: 'A file body and X-File-Name header are required.' }, { status: 400 });
+    }
+    let filename;
     try {
-        const formData = await req.formData();
-        const file = formData.get('file') as File;
-
-        if (!file) {
-            return NextResponse.json({ error: 'No file uploaded' }, { status: 400 });
+        filename = decodeURIComponent(encodedName).replace(/[^a-zA-Z0-9.-]/g, '_');
+    } catch {
+        return NextResponse.json({ error: 'Invalid filename.' }, { status: 400 });
+    }
+    if (!filename || filename.length > 200) return NextResponse.json({ error: 'Invalid filename.' }, { status: 400 });
+    const expectedSize = req.headers.get('content-length');
+    if (expectedSize && (!/^\d+$/.test(expectedSize) || Number(expectedSize) > MAX_UPLOAD_BYTES)) {
+        return NextResponse.json({ error: 'Files must be 1 GiB or smaller.' }, { status: 413 });
+    }
+    const uniqueFilename = `${randomUUID()}-${filename}`;
+    const uploadDir = path.join(process.cwd(), 'public', 'uploads');
+    const temporaryPath = path.join(uploadDir, `${uniqueFilename}.part`);
+    let bytes = 0;
+    try {
+        await mkdir(uploadDir, { recursive: true });
+        const limit = new Transform({
+            transform(chunk: Buffer, _encoding, callback) {
+                bytes += chunk.length;
+                if (bytes > MAX_UPLOAD_BYTES) callback(new Error('Files must be 1 GiB or smaller.'));
+                else callback(null, chunk);
+            },
+        });
+        await pipeline(
+            Readable.fromWeb(req.body as ReadableStream<Uint8Array>),
+            limit,
+            createWriteStream(temporaryPath, { flags: 'wx' }),
+            { signal: req.signal },
+        );
+        if (bytes === 0 || (expectedSize && bytes !== Number(expectedSize))) {
+            await rm(temporaryPath, { force: true });
+            return NextResponse.json({ error: 'The upload was empty or incomplete.' }, { status: 400 });
         }
-
-        const buffer = Buffer.from(await file.arrayBuffer());
-        // Clean filename to prevent traversal or weird chars
-        const filename = file.name.replace(/[^a-zA-Z0-9.-]/g, '_');
-        const uniqueFilename = `${Date.now()}-${filename}`;
-
-        const uploadDir = path.join(process.cwd(), 'public', 'uploads');
-
-        if (!fs.existsSync(uploadDir)) {
-            fs.mkdirSync(uploadDir, { recursive: true });
-        }
-
-        const filepath = path.join(uploadDir, uniqueFilename);
-        await writeFile(filepath, buffer);
-
-        // Return the public URL
-        const url = `/uploads/${uniqueFilename}`;
-        return NextResponse.json({ success: true, url, name: uniqueFilename });
-
-    } catch (error: any) {
-        console.error('Upload error:', error);
-        return NextResponse.json({ error: 'Upload failed' }, { status: 500 });
+        await rename(temporaryPath, path.join(uploadDir, uniqueFilename));
+        return NextResponse.json({ success: true, url: `/uploads/${uniqueFilename}`, name: uniqueFilename });
+    } catch (error) {
+        await rm(temporaryPath, { force: true });
+        const status = bytes > MAX_UPLOAD_BYTES ? 413 : req.signal.aborted ? 408 : 500;
+        if (status === 500) console.error('Upload error:', error);
+        return NextResponse.json({ error: status === 413 ? 'Files must be 1 GiB or smaller.' : status === 408 ? 'Upload cancelled.' : 'Unable to save the upload.' }, { status });
     }
 }
 

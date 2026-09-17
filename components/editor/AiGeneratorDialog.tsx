@@ -5,7 +5,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
 import { Loader2, Sparkles, AlertCircle, Settings, CheckCircle2, Layers as LayersIcon, Folder, ChevronRight, ChevronDown, Trash2 } from 'lucide-react';
 import { Clip } from '@/types';
-import { readPsd } from 'ag-psd';
+import { loadPsd, drawPsd } from '@/lib/psd';
+import { describePsd, defaultLayerRules, type PsdStructure } from '@/lib/psd-structure';
 
 interface AiGeneratorDialogProps {
     open: boolean;
@@ -18,7 +19,8 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
     const [prompt, setPrompt] = useState('');
     const [apiKey, setApiKey] = useState('');
     const [provider, setProvider] = useState('openai');
-    const [psdLayers, setPsdLayers] = useState<Record<string, string[]>>({}); // Cache for PSD layers
+    const [commandCodeModel, setCommandCodeModel] = useState('');
+    const [psdStructures, setPsdStructures] = useState<Record<string, PsdStructure>>({});
     const [tachieData, setTachieData] = useState<{
         id: string, name: string, url: string, layers: string[], role: string,
         rules?: {
@@ -93,9 +95,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
         if (fullPsdCache[url]) return fullPsdCache[url];
         setLoadingPreview(true);
         try {
-            const res = await fetch(url);
-            const buffer = await res.arrayBuffer();
-            const psd = readPsd(buffer); // Full load with image data
+            const psd = await loadPsd(url);
             setFullPsdCache(prev => ({ ...prev, [url]: psd }));
             return psd;
         } catch (e) {
@@ -113,88 +113,46 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
         }
     }, [configTachie]);
 
-    const autoConfigure = (id: string) => {
-        setTachieData(prev => prev.map(t => {
-            if (t.id !== id) return t;
-
-            const mandatory: string[] = [];
-            const exclusive: { name: string, path: string }[] = [];
-            const optional: string[] = [];
-
-            // Basic keyword detection (Japanese focus)
-            const folders = Array.from(new Set(t.layers
-                .filter(l => l.includes('/'))
-                .map(l => l.split('/').slice(0, 2).join('/'))
-            ));
-
-            folders.forEach(f => {
-                const name = f.split('/').pop() || '';
-                // Base components often named: 体, 服, 髪, 素体, ベース
-                if (/[体服髪]|素体|ベース|Body|Clothes|Hair|Base/i.test(name)) {
-                    mandatory.push(f);
-                }
-                // Group components often named: 目, 口, 眉, 表情, 腕, ポーズ
-                else if (/[目口眉]|表情|腕|ポーズ|Eyes|Mouth|Brows|Pose|Arm/i.test(name)) {
-                    exclusive.push({ name, path: f });
-                }
-            });
-
-            return { ...t, rules: { mandatory, exclusive, optional } };
-        }));
-    };
-
-
-    const loadPsdLayers = async (url: string) => {
-        if (psdLayers[url]) return psdLayers[url];
+    const loadPsdStructure = async (url: string) => {
+        if (psdStructures[url]) return psdStructures[url];
         setLoadingLayers(true);
         try {
-            const res = await fetch(url);
-            const buffer = await res.arrayBuffer();
-            const psd = readPsd(buffer, { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
-            const layerNames: string[] = [];
-            const traverse = (children: any[], path = '') => {
-                [...children].reverse().forEach(child => {
-                    const currentPath = path ? `${path}/${child.name}` : (child.name || 'Layer');
-                    layerNames.push(currentPath);
-                    if (child.children) traverse(child.children, currentPath);
-                });
-            };
-            if (psd.children) traverse(psd.children);
-            setPsdLayers(prev => ({ ...prev, [url]: layerNames }));
-            return layerNames;
-        } catch (e) {
-            console.error("Failed to extract PSD layers", e);
-            return [];
+            const structure = describePsd(await loadPsd(url, undefined, true));
+            setPsdStructures(prev => ({ ...prev, [url]: structure }));
+            return structure;
         } finally {
             setLoadingLayers(false);
         }
     };
 
+    const autoConfigure = async (id: string) => {
+        const character = tachieData.find(item => item.id === id);
+        if (!character) return;
+        try {
+            setError('');
+            const structure = await loadPsdStructure(character.url);
+            setTachieData(prev => prev.map(item => item.id === id ? {
+                ...item, layers: structure.nodes.map(node => node.path), rules: defaultLayerRules(structure),
+            } : item));
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'PSDの解析に失敗しました。');
+        }
+    };
+
     const addCharacter = async (psdUrl: string, defaultName: string) => {
-        const layers = await loadPsdLayers(psdUrl);
-        const newId = `char-${Date.now()}`;
-        setTachieData(prev => {
-            const newData = [...prev, {
-                id: newId,
-                name: defaultName,
-                url: psdUrl,
-                layers: layers,
-                role: '',
-                rules: { mandatory: [], exclusive: [], optional: [] },
-                voice: {
-                    provider: 'voicevox' as const,
-                    voicevoxSpeaker: '',
-                    voicevoxStyle: undefined,
-                    aivoicePreset: '',
-                    cevioaiSpeaker: ''
-                },
-                facing: 'right' as const
-            }];
-            // Try auto-configure for new characters if they look like they need it
-            return newData;
-        });
-        // Run auto-config after state update
-        setTimeout(() => autoConfigure(newId), 10);
+        try {
+            setError('');
+            const structure = await loadPsdStructure(psdUrl);
+            setTachieData(prev => [...prev, {
+                id: `char-${Date.now()}`, name: defaultName, url: psdUrl,
+                layers: structure.nodes.map(node => node.path), role: '',
+                rules: defaultLayerRules(structure),
+                voice: { provider: 'voicevox' as const, voicevoxSpeaker: '', aivoicePreset: '', cevioaiSpeaker: '' },
+                facing: 'right' as const,
+            }]);
+        } catch (error) {
+            setError(error instanceof Error ? error.message : 'PSDの解析に失敗しました。');
+        }
     };
 
     const removeCharacter = (id: string) => {
@@ -207,7 +165,13 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
         try {
             setLoading(true);
             setError('');
-            setStatus('Thinking...');
+            setStatus('PSDの構造と初期表示を確認中...');
+            const characters = [];
+            for (const character of tachieData) {
+                const structure = await loadPsdStructure(character.url);
+                characters.push({ ...character, name: character.name.trim(), structure });
+            }
+            setStatus('AIが台本・表情・レイアウトを生成・検証中...');
 
             const res = await fetch('/api/ai/generate', {
                 method: 'POST',
@@ -216,21 +180,14 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                     prompt,
                     apiKey,
                     provider,
-                    tachies: tachieData.map(t => ({
-                        name: t.name,
-                        role: t.role,
-                        layers: t.layers,
-                        url: t.url,
-                        rules: t.rules,
-                        voice: t.voice,
-                        facing: (t.facing || 'right') as 'left' | 'right'
-                    }))
+                    model: provider === 'commandcode' ? commandCodeModel : undefined,
+                    tachies: characters
                 })
             });
 
             if (!res.ok) {
                 const data = await res.json();
-                throw new Error(data.error || 'Generation failed');
+                throw new Error([data.error || 'Generation failed', ...(data.issues || []).slice(0, 5)].join('\n'));
             }
 
             setStatus('Synthesizing Voices...');
@@ -299,27 +256,55 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
 
                     <div className="grid grid-cols-2 gap-4">
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium">AI Provider</label>
+                            <label htmlFor="ai-provider" className="text-sm font-medium">AI Provider</label>
                             <select
+                                id="ai-provider"
                                 className="flex h-9 w-full rounded-md border border-input bg-transparent px-3 py-1 text-sm shadow-sm transition-colors file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:cursor-not-allowed disabled:opacity-50"
                                 value={provider}
-                                onChange={(e) => setProvider(e.target.value)}
+                                onChange={(e) => {
+                                    setProvider(e.target.value);
+                                    setApiKey('');
+                                    setError('');
+                                }}
                             >
                                 <option value="openai">OpenAI (GPT-4o)</option>
                                 <option value="gemini">Google Gemini</option>
+                                <option value="commandcode">Command Code</option>
                             </select>
                         </div>
                         <div className="grid gap-2">
-                            <label className="text-sm font-medium text-muted-foreground">API Key (Optional)</label>
+                            <label htmlFor="ai-api-key" className="text-sm font-medium text-muted-foreground">API Key (Optional)</label>
                             <Input
+                                id="ai-api-key"
                                 type="password"
-                                placeholder={provider === 'openai' ? "sk-..." : "AIza..."}
+                                placeholder={provider === 'commandcode' ? 'Command Code API key' : provider === 'openai' ? 'sk-...' : 'AIza...'}
                                 value={apiKey}
                                 onChange={(e) => setApiKey(e.target.value)}
                                 className="text-xs"
                             />
                         </div>
                     </div>
+
+                    {provider === 'commandcode' && (
+                        <div className="grid gap-2">
+                            <label htmlFor="commandcode-model" className="text-sm font-medium">Model ID (Optional)</label>
+                            <Input
+                                id="commandcode-model"
+                                placeholder="deepseek/deepseek-v4-flash"
+                                value={commandCodeModel}
+                                onChange={(e) => setCommandCodeModel(e.target.value)}
+                                aria-describedby="commandcode-help"
+                            />
+                            <p id="commandcode-help" className="text-xs text-muted-foreground">
+                                Defaults to deepseek/deepseek-v4-flash. Leave the API key blank to use CMD_API_KEY on the server.{' '}
+                                <a href="https://commandcode.ai/docs/reference/cli/models" target="_blank" rel="noreferrer" className="underline">Available models</a>
+                            </p>
+                        </div>
+                    )}
+
+                    {error && (
+                        <p role="alert" className="text-sm text-destructive whitespace-pre-wrap">{error}</p>
+                    )}
 
                     <div className="grid gap-4">
                         <label className="text-sm font-medium">Characters Configuration</label>
@@ -347,6 +332,10 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                         </div>
                                     </div>
 
+                                    <p className="text-xs text-muted-foreground mb-2">
+                                        {psdStructures[data.url] ? `${psdStructures[data.url].nodes.filter(node => !node.group).length} パーツ・初期表示 ${psdStructures[data.url].nodes.filter(node => !node.group && node.visible).length} パーツを解析済み。` : '生成時にPSDの構造と初期表示を読み取ります。'}
+                                        体・服を保ち、AIが表情を選びます。
+                                    </p>
                                     <div className="grid gap-1.5 pl-1">
                                         <Input
                                             placeholder="AI Role: e.g. Teacher, energetic helper..."
@@ -373,8 +362,9 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                                                 variant="ghost" size="sm"
                                                 className="h-6 gap-1 text-[10px] text-muted-foreground hover:bg-secondary/20 p-1 mt-0.5 justify-start w-fit shadow-none"
                                                 onClick={() => autoConfigure(data.id)}
+                                                disabled={loadingLayers || loading}
                                             >
-                                                <Sparkles size={10} /> Auto-Detect
+                                                <Sparkles size={10} /> 構造を再解析
                                             </Button>
                                             <div className="flex bg-secondary/20 rounded h-6 p-0.5 ml-auto">
                                                 <button
@@ -444,9 +434,7 @@ export function AiGeneratorDialog({ open, onOpenChange, onGenerate, availableTac
                             loading={loadingPreview}
                         />
                         <div className="text-[9px] text-muted-foreground leading-relaxed">
-                            This preview shows only <strong>Base (Mandatory)</strong> layers.
-                            Use this to ensure you've selected enough parts to form the character's core appearance (Body, Hair, Outfit).
-                            Expression layers (Eyes, Mouth) will be chosen by AI later.
+                            PSDの初期表示を基準に、体・髪・服を保持します。表情は実在するパーツからAIが選び、口パク差分がなければ固定表示にします。画像はAIに送信しません。
                         </div>
                     </div>
 
@@ -640,37 +628,7 @@ function TachiePreview({ psd, mandatoryLayers, exclusiveGroups, loading }: { psd
         canvas.height = psd.height;
         ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-        const drawLayers = (layers: any[], parentPath: string = '') => {
-            // Draw from bottom-most (0) to top-most (length-1)
-            for (let i = 0; i < layers.length; i++) {
-                const layer = layers[i];
-                if (layer.hidden) continue;
-
-                const currentPath = parentPath ? `${parentPath}/${layer.name}` : (layer.name || 'Layer');
-                const isMandatory = mandatoryLayers.includes(currentPath);
-                const isExclusiveGroup = exclusiveGroups.includes(currentPath);
-                const hasMandatoryChild = mandatoryLayers.some(m => m.startsWith(currentPath + '/'));
-
-                if (layer.children) {
-                    if (isMandatory || hasMandatoryChild) {
-                        drawLayers(layer.children, currentPath);
-                    } else if (isExclusiveGroup) {
-                        // For preview, just draw the first visible non-hidden child of an exclusive group
-                        const firstChild = layer.children.find((c: any) => !c.hidden);
-                        if (firstChild) {
-                            drawLayers([firstChild], currentPath);
-                        }
-                    }
-                } else if (isMandatory && layer.canvas) {
-                    ctx.drawImage(layer.canvas, layer.left ?? 0, layer.top ?? 0);
-                } else if (parentPath && exclusiveGroups.includes(parentPath) && layer.canvas) {
-                    // This is a child of an exclusive group folder being drawn via the 'firstChild' logic above
-                    ctx.drawImage(layer.canvas, layer.left ?? 0, layer.top ?? 0);
-                }
-            }
-        };
-
-        if (psd.children) drawLayers(psd.children);
+        drawPsd(ctx, psd, { mandatoryLayers });
     }, [psd, mandatoryLayers, exclusiveGroups]);
 
     return (

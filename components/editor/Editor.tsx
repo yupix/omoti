@@ -15,7 +15,8 @@ import {
     Loader2, Save, FolderOpen, Globe, Scissors, Copy, Trash2,
     Maximize2, X, ChevronLeft, ChevronRight, Settings2, Library, Smile
 } from 'lucide-react';
-import { readPsd } from 'ag-psd';
+import { loadPsd } from '@/lib/psd';
+import { describePsd } from '@/lib/psd-structure';
 import { getAIVoicePresets } from '@/lib/aivoice';
 import { getVoicevoxSpeakers, VoicevoxSpeaker } from '@/lib/voicevox';
 import { PropertiesPanel } from './PropertiesPanel';
@@ -26,7 +27,8 @@ import { Sparkles } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
 
 import { INITIAL_CLIPS, INITIAL_TRACKS } from './constants';
-import { Asset, AssetFolder, getMediaDuration, getMediaDimensions } from './utils';
+import { Asset, AssetFolder, getMediaDuration, uploadAsset } from './utils';
+import type { UploadProgress } from '@/lib/upload';
 import { setFrame as setEditorFrame, getSnapshot as getEditorFrame } from './editorFrameStore';
 import { FrameDisplay, FullscreenFrameDisplay, FrameSeekBar, PreviewClipOverlays } from './EditorFrameComponents';
 
@@ -72,6 +74,10 @@ export default function Editor() {
     const [assets, setAssets] = useState<Asset[]>([]);
     const [assetFolders, setAssetFolders] = useState<AssetFolder[]>([]);
     const [isUploading, setIsUploading] = useState(false);
+    const [uploadProgress, setUploadProgress] = useState<(UploadProgress & { name: string }) | null>(null);
+    const [uploadError, setUploadError] = useState('');
+    const uploadAbort = useRef<AbortController | null>(null);
+    useEffect(() => () => uploadAbort.current?.abort(), []);
 
     const [localVolume, setLocalVolume] = useState<number | null>(null);
     const [availableLayers, setAvailableLayers] = useState<string[]>([]);
@@ -184,13 +190,6 @@ export default function Editor() {
             } catch (e) {
                 console.error('Failed to parse tachie presets', e);
             }
-        } else {
-            // Seed default presets if empty
-            const psdUrl = '/uploads/1770692241459-_____SD___.psd';
-            setTachiePresets([
-                { id: 'p-akane', name: 'a (琴乃茜)', assetUrl: psdUrl, layers: [], facing: 'right' },
-                { id: 'p-aoi', name: 'aoi (葵)', assetUrl: psdUrl, layers: [], facing: 'right' }
-            ]);
         }
     }, []);
 
@@ -258,8 +257,7 @@ export default function Editor() {
             .then(async (data) => {
                 if (data.files) {
                     const mapped = await Promise.all(data.files.map(async (f: any) => {
-                        const origin = window.location.origin;
-                        const fullUrl = `${origin}/uploads/${f.name}`;
+                        const fullUrl = `/uploads/${f.name}`;
                         const type = f.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
                             f.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' :
                                 f.name.match(/\.psd$/i) ? 'tachie' : 'image';
@@ -280,66 +278,31 @@ export default function Editor() {
             .catch(console.error);
     }, []);
 
-    const uploadFiles = useCallback(async (files: File[]) => {
+    const uploadFiles = useCallback(async (files: File[], onUploaded?: (asset: Asset) => void) => {
+        if (uploadAbort.current || files.length === 0) return;
+        const controller = new AbortController();
+        uploadAbort.current = controller;
+        setIsUploading(true);
+        setUploadError('');
         try {
-            setIsUploading(true);
-            const newAssets: Asset[] = [];
-
             for (const file of files) {
-                const formData = new FormData();
-                formData.append('file', file);
-
-                const res = await fetch('/api/upload', {
-                    method: 'POST',
-                    body: formData
-                });
-
-                if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
-
-                const data = await res.json();
-
-                // Refresh assets
-                const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
-                    data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
-                        data.name.match(/\.psd$/i) ? 'tachie' : 'image';
-
-                const origin = window.location.origin;
-                const fullUrl = `${origin}${data.url}`;
-
-                let duration = 0;
-                let width: number | undefined;
-                let height: number | undefined;
-                if (type === 'video' || type === 'audio') {
-                    duration = await getMediaDuration(fullUrl, type);
-                }
-                if (type === 'video' || type === 'image' || type === 'tachie') {
-                    const dims = await getMediaDimensions(fullUrl, type);
-                    width = dims.width;
-                    height = dims.height;
-                }
-
-                newAssets.push({
-                    name: data.name,
-                    url: fullUrl,
-                    type,
-                    duration,
-                    width,
-                    height
-                });
+                controller.signal.throwIfAborted();
+                setUploadProgress({ name: file.name, loaded: 0, total: file.size, phase: 'processing' });
+                const asset = await uploadAsset(file, progress => setUploadProgress({ name: file.name, ...progress }), controller.signal);
+                setAssets(prev => [...prev, asset]);
+                onUploaded?.(asset);
             }
-
-            if (newAssets.length > 0) {
-                setAssets(prev => [...prev, ...newAssets]);
-                // Auto-switch to assets tab
-                setActiveTab('assets');
-            }
+            setActiveTab('assets');
         } catch (error) {
-            console.error(error);
-            alert('Upload failed');
+            if (!(error instanceof DOMException && error.name === 'AbortError')) {
+                setUploadError(error instanceof Error ? error.message : 'Upload failed');
+            }
         } finally {
+            uploadAbort.current = null;
             setIsUploading(false);
+            setUploadProgress(null);
         }
-    }, [getMediaDuration, setAssets, setActiveTab]);
+    }, []);
 
     const removeAsset = useCallback((url: string) => {
         setAssets(prev => prev.filter(a => a.url !== url));
@@ -369,36 +332,18 @@ export default function Editor() {
         if (selectedClip && selectedClip.type === 'tachie') {
             const loadLayers = async () => {
                 try {
-                    const response = await fetch(selectedClip.content);
-                    const buffer = await response.arrayBuffer();
-                    // Just read structure, skip images for speed
-                    const psd = readPsd(buffer, { skipLayerImageData: true, skipCompositeImageData: true, skipThumbnail: true });
+                    const psd = await loadPsd(selectedClip.content, undefined, true);
 
-                    const names: string[] = [];
-                    const defaultVisible: string[] = [];
-                    const withChildren: string[] = [];
-                    const extractNames = (layers: any[], parentPath: string = '', parentVisible: boolean = true) => {
-                        // ag-psd returns layers from bottom to top.
-                        // For the UI list, we want top to bottom (like Photoshop).
-                        [...layers].reverse().forEach(l => {
-                            const currentPath = parentPath ? `${parentPath}/${l.name}` : (l.name || 'Unnamed Layer');
-                            names.push(currentPath);
-                            const isVisible = parentVisible && !l.hidden;
-                            if (isVisible) {
-                                defaultVisible.push(currentPath);
-                            }
-                            if (l.children && l.children.length > 0) {
-                                withChildren.push(currentPath);
-                                extractNames(l.children, currentPath, isVisible);
-                            }
-                        });
-                    };
-                    if (psd.children) extractNames(psd.children);
+                    const structure = describePsd(psd);
+                    const nodes = [...structure.nodes].reverse();
+                    const names = nodes.map(node => node.path);
+                    const defaultVisible = nodes.filter(node => node.visible).map(node => node.path);
+                    const withChildren = nodes.filter(node => node.group).map(node => node.path);
                     setAvailableLayers(names);
                     setPathsWithChildren(new Set(withChildren));
 
                     // Initialize tachieLayers if empty
-                    if (!selectedClip.tachieLayers || selectedClip.tachieLayers.length === 0) {
+                    if ((!selectedClip.tachieLayers || selectedClip.tachieLayers.length === 0) && !selectedClip.mouthOpenLayers?.length && !selectedClip.mouthClosedLayers?.length) {
                         handleUpdateClip('tachieLayers', defaultVisible);
                     }
                 } catch (e) {
@@ -671,60 +616,16 @@ export default function Editor() {
             // Check if Native OS File Drag & Drop
             if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                 const files = Array.from(e.dataTransfer.files);
-                // Call uploadFiles which handles the actual uploading
-                // It currently just adds to assets. We want to also drop them here.
-                // Since uploadFiles handles multiple and adds to state, we should ideally hook into it or replicate it.
-                // Refactoring: the cleanest way is to upload them, then add to timeline.
-                setIsUploading(true);
                 let currentFrameOffset = frame;
-
-                for (const file of files) {
-                    const formData = new FormData();
-                    formData.append('file', file);
-
-                    const res = await fetch('/api/upload', {
-                        method: 'POST',
-                        body: formData
-                    });
-
-                    if (!res.ok) throw new Error(`Upload failed for ${file.name}`);
-                    const data = await res.json();
-
-                    const type = data.name.match(/\.(mp4|webm|mov|ogg|mkv)$/i) ? 'video' :
-                        data.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
-                            data.name.match(/\.psd$/i) ? 'tachie' : 'image';
-
-                    const origin = window.location.origin;
-                    const fullUrl = `${origin}${data.url}`;
-
-                    let duration = 0;
-                    let width: number | undefined;
-                    let height: number | undefined;
-                    if (type === 'video' || type === 'audio') {
-                        duration = await getMediaDuration(fullUrl, type);
-                    }
-                    if (type === 'video' || type === 'image' || type === 'tachie') {
-                        const dims = await getMediaDimensions(fullUrl, type);
-                        width = dims.width;
-                        height = dims.height;
-                    }
-
-                    // 1. Add to global assets list quietly so it appears in the panel
-                    setAssets(prev => [...prev, { name: data.name, url: fullUrl, type, duration, width, height }]);
-
-                    // 2. Add to timeline
-                    addClip(type, fullUrl, duration, currentFrameOffset, trackId, width, height);
-
-                    // Sequential drop shift
-                    currentFrameOffset += (duration ? Math.ceil(duration * 30) : 60);
-                }
-                setIsUploading(false);
+                await uploadFiles(files, asset => {
+                    addClip(asset.type, asset.url, asset.duration, currentFrameOffset, trackId, asset.width, asset.height);
+                    currentFrameOffset += asset.duration ? Math.ceil(asset.duration * 30) : 60;
+                });
             }
         } catch (err) {
             console.error('Failed to parse drop data', err);
-            setIsUploading(false);
         }
-    }, [addClip, getMediaDuration]);
+    }, [addClip, uploadFiles]);
 
     const removeClip = useCallback(() => {
         setSelectedClipId(currentId => {
@@ -1100,12 +1001,13 @@ export default function Editor() {
             // Actually, let's keep it clean.
 
             const newTracks: Track[] = usedTrackIds.sort((a, b) => a - b).map(id => {
-                let name = `Track ${id}`;
-                if (id === 1) name = 'Text/Subtitles';
-                else if (id === 2) name = 'Characters';
-                else if (id === 3) name = 'Audio/BGM';
-                else if (id === 10) name = 'Background';
-                else if (id >= 4 && id < 10) name = `Overlay ${id - 3}`;
+                const trackClips = newClips.filter(clip => clip.trackId === id);
+                let name = `Overlay ${id}`;
+                if (trackClips.every(clip => clip.title === 'Subtitle')) name = 'Subtitles';
+                else if (trackClips.every(clip => clip.title === 'Main Title')) name = 'Title';
+                else if (trackClips.every(clip => clip.type === 'tachie')) name = 'Characters';
+                else if (trackClips.every(clip => clip.type === 'audio')) name = 'Audio/BGM';
+                else if (trackClips.every(clip => clip.title === 'Background')) name = 'Background';
 
                 return { id, name };
             });
@@ -1142,6 +1044,22 @@ export default function Editor() {
 
     return (
         <div className="flex flex-col h-screen w-full bg-background text-foreground overflow-hidden font-sans">
+            {(uploadProgress || uploadError) && (
+                <div className="fixed bottom-6 right-6 z-50 w-80 rounded-lg border bg-background p-4 shadow-xl space-y-2">
+                    {uploadProgress ? <>
+                        <p className="text-sm font-medium truncate" title={uploadProgress.name}>{uploadProgress.name}</p>
+                        <p role="status" className="text-xs text-muted-foreground">
+                            {t(`editor.assets.upload.${uploadProgress.phase}`)}
+                            {uploadProgress.phase === 'uploading' && ` ${Math.round(uploadProgress.loaded / Math.max(1, uploadProgress.total) * 100)}% (${(uploadProgress.loaded / 1048576).toFixed(1)} / ${(uploadProgress.total / 1048576).toFixed(1)} MiB)`}
+                        </p>
+                        <progress aria-label={t('editor.assets.upload.uploading')} className="w-full" max={Math.max(1, uploadProgress.total)} value={uploadProgress.loaded} />
+                        <Button size="sm" variant="outline" onClick={() => uploadAbort.current?.abort()}>{t('editor.assets.upload.cancel')}</Button>
+                    </> : <>
+                        <p role="alert" className="text-sm text-destructive">{uploadError}</p>
+                        <Button size="sm" variant="outline" onClick={() => setUploadError('')}>{t('editor.assets.upload.close')}</Button>
+                    </>}
+                </div>
+            )}
             <div className="flex flex-1 overflow-hidden">
                 {/* VS Code style Activity Bar (Permanent) */}
                 <nav className="w-16 border-r border-border bg-card flex flex-col items-center py-4 z-30 shrink-0 select-none">
@@ -1234,6 +1152,7 @@ export default function Editor() {
                                     handleUpdateAnimation={handleUpdateAnimation}
                                     removeClip={removeClip}
                                     addClip={addClip}
+                                    tachieAssets={assets.filter(asset => asset.type === 'tachie')}
                                     tachiePresets={tachiePresets}
                                     setTachiePresets={setTachiePresets}
                                     availableLayers={availableLayers}

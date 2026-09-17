@@ -1,16 +1,18 @@
-
 import { NextRequest, NextResponse } from 'next/server';
 import { bundle } from '@remotion/bundler';
-import { renderMedia, selectComposition } from '@remotion/renderer';
+import { openBrowser, renderMedia, selectComposition } from '@remotion/renderer';
 import path from 'path';
-import fs from 'fs';
+import fs from 'node:fs/promises';
+import { tmpdir } from 'node:os';
 
 export async function POST(req: NextRequest) {
+    let workDir: string | undefined;
+    let browser: Awaited<ReturnType<typeof openBrowser>> | undefined;
     try {
         const body = await req.json();
         const { clips, assetBaseUrl } = body;
 
-        if (!clips) {
+        if (!Array.isArray(clips)) {
             return NextResponse.json({ error: 'No clips provided' }, { status: 400 });
         }
 
@@ -23,29 +25,28 @@ export async function POST(req: NextRequest) {
         const entryPoint = path.join(process.cwd(), 'remotion', 'index.ts');
         console.log('Bundling from:', entryPoint);
 
-        // Check if entry exists
-        if (!fs.existsSync(entryPoint)) {
-            console.error('Entry point not found:', entryPoint);
-            throw new Error('Entry point not found');
-        }
-
+        workDir = await fs.mkdtemp(path.join(tmpdir(), 'omoti-render-'));
+        const publicDir = path.join(workDir, 'public');
+        await fs.mkdir(publicDir);
         const bundleLocation = await bundle({
             entryPoint,
-            // In production you might want to cache this
+            outDir: path.join(workDir, 'bundle'),
+            // Uploaded media already resolve against assetBaseUrl. Copying all
+            // PSDs (and previous exports) into every bundle only duplicates I/O.
+            publicDir,
         });
 
         console.log('Bundled to:', bundleLocation);
 
         // 2. Select Composition
+        browser = await openBrowser('chrome');
+        const inputProps = { clips, primaryColor: '#6d28d9', assetBaseUrl: baseUrl };
         const compositionId = 'MainVideo';
         const composition = await selectComposition({
             serveUrl: bundleLocation,
             id: compositionId,
-            inputProps: {
-                clips,
-                primaryColor: '#6d28d9',
-                assetBaseUrl: baseUrl,
-            },
+            inputProps,
+            puppeteerInstance: browser,
         });
 
         // 3. Render
@@ -57,11 +58,8 @@ export async function POST(req: NextRequest) {
             serveUrl: bundleLocation,
             codec: 'h264',
             outputLocation,
-            inputProps: {
-                clips,
-                primaryColor: '#6d28d9',
-                assetBaseUrl: baseUrl,
-            },
+            inputProps,
+            puppeteerInstance: browser,
             // You can tweak these for speed vs quality
             crf: 20,
             pixelFormat: 'yuv420p',
@@ -80,5 +78,8 @@ export async function POST(req: NextRequest) {
             error: error.message || 'Render failed',
             details: error.stack
         }, { status: 500 });
+    } finally {
+        if (browser) await browser.close({ silent: true }).catch(error => console.error('Browser cleanup failed:', error));
+        if (workDir) await fs.rm(workDir, { recursive: true, force: true }).catch(error => console.error('Bundle cleanup failed:', error));
     }
 }

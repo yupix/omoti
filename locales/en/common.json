@@ -10,6 +10,9 @@
             "playbackSpeed": "Playback Speed (x)",
             "volume": "Volume",
             "content": "Content",
+            "psdFile": "PSD file",
+            "currentPsd": "Current source",
+            "psdHelp": "Upload a PSD in Assets, then select it here. Replacing it resets layer and lip-sync selections.",
             "label": "Label",
             "value": "Value",
             "language": "Language",
@@ -34,7 +37,12 @@
         "assets": {
             "upload": {
                 "title": "Click to Upload",
-                "subtitle": "Images, Videos or Audio"
+                "subtitle": "Images, Videos, Audio or PSD",
+                "uploading": "Uploading",
+                "saving": "Transfer complete; saving on server",
+                "processing": "Reading file information",
+                "cancel": "Cancel",
+                "close": "Close"
             },
             "library": "Library",
             "empty": "No assets yet"

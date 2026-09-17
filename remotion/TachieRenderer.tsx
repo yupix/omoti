@@ -1,164 +1,71 @@
-import { useCurrentFrame, delayRender, continueRender, useVideoConfig } from 'remotion';
-import React, { useEffect, useState, useMemo } from 'react';
-import { readPsd, Psd, Layer } from 'ag-psd';
-import { Clip } from '../types';
-import { useAudioData, visualizeAudio } from "@remotion/media-utils";
+import { useCurrentFrame, useDelayRender, useVideoConfig, getRemotionEnvironment } from 'remotion';
+import React, { useEffect, useLayoutEffect, useRef, useState } from 'react';
+import type { Psd } from 'ag-psd';
+import type { Clip } from '../types';
+import { useAudioData, visualizeAudio } from '@remotion/media-utils';
 import { resolveAssetUrl } from './utils';
+import { drawPsd, loadPsd } from '../lib/psd';
 
 interface TachieRendererProps {
     clip: Clip;
     assetBaseUrl?: string;
 }
 
-const psdCache: Record<string, Psd> = {};
-
-export const TachieRenderer: React.FC<TachieRendererProps> = ({ clip, assetBaseUrl }) => {
+function PsdTachie({ clip, assetBaseUrl, mouthOpen = false }: TachieRendererProps & { mouthOpen?: boolean }) {
+    const { tachieLayers, mandatoryLayers, mouthOpenLayers, mouthClosedLayers } = clip;
     const [psd, setPsd] = useState<Psd | null>(null);
     const [error, setError] = useState<string | null>(null);
-    const [handle] = useState(() => delayRender(`Loading Tachie: ${clip.title}`));
+    const [attempt, setAttempt] = useState(0);
+    const canvasRef = useRef<HTMLCanvasElement>(null);
+    const renderHandle = useRef<number | null>(null);
+    const { delayRender, continueRender, cancelRender } = useDelayRender();
+    useEffect(() => {
+        let mounted = true;
+        const handle = delayRender(`Loading PSD: ${clip.content}`, { timeoutInMilliseconds: 180_000 });
+        renderHandle.current = handle;
+        setError(null);
+        setPsd(null);
+        loadPsd(clip.content, assetBaseUrl).then(result => {
+            if (mounted) setPsd(result);
+        }).catch(error => {
+            if (!mounted) return;
+            if (getRemotionEnvironment().isRendering) cancelRender(error);
+            else setError(error instanceof Error ? error.message : 'PSDを読み込めませんでした。');
+            continueRender(handle);
+        });
+        return () => { mounted = false; continueRender(handle); };
+    }, [clip.content, assetBaseUrl, attempt, delayRender, continueRender, cancelRender]);
 
-    // Audio analysis for Lip Sync
-    const resolvedAudioUrl = clip.audioUrl ? resolveAssetUrl(clip.audioUrl, assetBaseUrl) : null;
-    const audioData = resolvedAudioUrl ? useAudioData(resolvedAudioUrl) : null;
+    useLayoutEffect(() => {
+        const canvas = canvasRef.current;
+        const ctx = canvas?.getContext('2d');
+        if (!canvas || !ctx || !psd) return;
+        if (canvas.width !== psd.width) canvas.width = psd.width;
+        if (canvas.height !== psd.height) canvas.height = psd.height;
+        try {
+            drawPsd(ctx, psd, { tachieLayers, mandatoryLayers, mouthOpenLayers, mouthClosedLayers }, mouthOpen);
+        } catch (error) {
+            cancelRender(error);
+        } finally {
+            if (renderHandle.current !== null) continueRender(renderHandle.current);
+        }
+    }, [psd, tachieLayers, mandatoryLayers, mouthOpenLayers, mouthClosedLayers, mouthOpen, continueRender, cancelRender]);
+
+    if (error) return <div role="alert" style={{ font: '20px sans-serif', color: '#fff', background: '#3f2027', padding: 20, borderRadius: 12, textShadow: 'none' }}>
+        <p style={{ margin: '0 0 12px' }}>{error}</p>
+        <button onClick={() => setAttempt(value => value + 1)} style={{ textDecoration: 'underline' }}>再読み込み</button>
+    </div>;
+    return <canvas ref={canvasRef} aria-label="立ち絵" style={{ width: '100%', height: '100%', objectFit: 'contain' }} />;
+}
+
+function TalkingTachie({ audioUrl, ...props }: TachieRendererProps & { audioUrl: string }) {
+    const audio = useAudioData(audioUrl);
     const frame = useCurrentFrame();
     const { fps } = useVideoConfig();
+    const mouthOpen = audio ? visualizeAudio({ audioData: audio, frame, fps, numberOfSamples: 1 })[0] > 0.05 : false;
+    return <PsdTachie {...props} mouthOpen={mouthOpen} />;
+}
 
-    let isMouthOpen = false;
-    if (audioData) {
-        const amplitude = visualizeAudio({
-            audioData,
-            frame,
-            fps,
-            numberOfSamples: 1,
-        })[0];
-        // Threshold for mouth opening (0-1)
-        isMouthOpen = amplitude > 0.05;
-    }
-
-    useEffect(() => {
-        let isMounted = true;
-        const loadPsd = async () => {
-            if (psdCache[clip.content]) {
-                if (isMounted) {
-                    setPsd(psdCache[clip.content]);
-                    continueRender(handle);
-                }
-                return;
-            }
-
-            try {
-                const resolvedUrl = resolveAssetUrl(clip.content, assetBaseUrl);
-                const response = await fetch(resolvedUrl);
-                if (!response.ok) throw new Error(`Failed to fetch PSD`);
-                const buffer = await response.arrayBuffer();
-                const parsedPsd = readPsd(buffer);
-                psdCache[clip.content] = parsedPsd;
-                if (isMounted) {
-                    setPsd(parsedPsd);
-                    continueRender(handle);
-                }
-            } catch (err: any) {
-                console.error('Failed to load PSD:', err);
-                if (isMounted) {
-                    setError(`Failed to load PSD: ${err.message}`);
-                    continueRender(handle);
-                }
-            }
-        };
-
-        loadPsd();
-        return () => { isMounted = false; };
-    }, [clip.content, handle, assetBaseUrl]);
-
-    const renderedImage = useMemo(() => {
-        if (!psd) return null;
-
-        const canvas = document.createElement('canvas');
-        canvas.width = psd.width;
-        canvas.height = psd.height;
-        const ctx = canvas.getContext('2d');
-        if (!ctx) return null;
-
-        const drawLayers = (layers: Layer[], parentPath: string = '') => {
-            // Draw from bottom-most layer to top-most layer (back-to-front)
-            // ag-psd returns layers in bottom-to-top order in some contexts, 
-            // but standard PSD structure is often reported top-to-bottom.
-            // Based on user feedback and structure analysis, 0 to length-1 is the correct back-to-front drawing order.
-            for (let i = 0; i < layers.length; i++) {
-                const layer = layers[i];
-                const currentPath = parentPath ? `${parentPath}/${layer.name}` : (layer.name || 'Unnamed Layer');
-
-                // Visibility logic
-                let isVisible = !layer.hidden;
-                let shouldTraverse = true;
-
-                if (clip.tachieLayers && clip.tachieLayers.length > 0) {
-                    const inBaseList = clip.tachieLayers.includes(currentPath);
-                    const isMandatory = clip.mandatoryLayers?.includes(currentPath);
-                    const isOpenMouth = clip.mouthOpenLayers?.includes(currentPath);
-                    const isClosedMouth = clip.mouthClosedLayers?.includes(currentPath);
-
-                    const childInBase = !!(layer.children && clip.tachieLayers.some(p => p.startsWith(currentPath + '/')));
-                    const childInMandatory = !!(layer.children && clip.mandatoryLayers?.some(p => p.startsWith(currentPath + '/')));
-                    const childInOpen = !!(layer.children && clip.mouthOpenLayers?.some(p => p.startsWith(currentPath + '/')));
-                    const childInClosed = !!(layer.children && clip.mouthClosedLayers?.some(p => p.startsWith(currentPath + '/')));
-
-                    if (layer.children) {
-                        // Traverse if any of our states need this folder
-                        isVisible = inBaseList || childInBase || isMandatory || childInMandatory || isOpenMouth || childInOpen || isClosedMouth || childInClosed;
-                        shouldTraverse = isVisible;
-                    } else {
-                        // Leaf logic
-                        if (isOpenMouth) isVisible = !!isMouthOpen;
-                        else if (isClosedMouth) isVisible = !isMouthOpen;
-                        else {
-                            isVisible = !!(inBaseList || isMandatory);
-
-                            // Prevent double mouth: If lip-sync is active and this is a mouth-related layer
-                            // in the base list but not explicitly managed, treat it as a closed-mouth layer.
-                            const isAnyMouthConfigured = (clip.mouthOpenLayers?.length || 0) > 0 || (clip.mouthClosedLayers?.length || 0) > 0;
-                            if (isVisible && !isMandatory && isAnyMouthConfigured) {
-                                const pathLower = currentPath.toLowerCase();
-                                if (pathLower.includes('mouth') || pathLower.includes('口')) {
-                                    isVisible = !isMouthOpen;
-                                }
-                            }
-                        }
-
-                        shouldTraverse = false;
-                    }
-                }
-
-                if (layer.children) {
-                    if (shouldTraverse) {
-                        drawLayers(layer.children, currentPath);
-                    }
-                } else if (isVisible && layer.canvas) {
-                    ctx.drawImage(layer.canvas, layer.left ?? 0, layer.top ?? 0);
-                }
-            }
-        };
-
-        if (psd.children) {
-            drawLayers(psd.children);
-        }
-
-        return canvas.toDataURL();
-    }, [psd, clip.tachieLayers, clip.mouthOpenLayers, clip.mouthClosedLayers, isMouthOpen]);
-
-    if (error) return <div style={{ color: 'red' }}>{error}</div>;
-    if (!renderedImage) return null;
-
-    return (
-        <img
-            src={renderedImage}
-            alt="tachie"
-            style={{
-                width: '100%',
-                height: '100%',
-                objectFit: 'contain',
-                ...clip.style
-            }}
-        />
-    );
-};
+export const TachieRenderer: React.FC<TachieRendererProps> = props => props.clip.audioUrl
+    ? <TalkingTachie {...props} audioUrl={resolveAssetUrl(props.clip.audioUrl, props.assetBaseUrl)} />
+    : <PsdTachie {...props} />;

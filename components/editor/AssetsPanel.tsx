@@ -309,7 +309,7 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
             {/* Upload Box */}
             <div
                 className={`border-2 border-dashed rounded-lg p-6 flex flex-col items-center justify-center gap-2 transition-all cursor-pointer group ${isDragActive ? 'border-primary bg-primary/10' : 'border-border hover:border-primary hover:bg-primary/5'}`}
-                onClick={() => document.getElementById('asset-upload')?.click()}
+                onClick={() => { if (!isUploading) document.getElementById('asset-upload')?.click(); }}
                 onDragOver={(e) => {
                     e.preventDefault();
                     setIsDragActive(true);
@@ -318,7 +318,7 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                 onDrop={(e) => {
                     e.preventDefault();
                     setIsDragActive(false);
-                    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                    if (!isUploading && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
                         uploadFiles(Array.from(e.dataTransfer.files));
                     }
                 }}
@@ -326,10 +326,11 @@ const AssetsPanelInner: React.FC<AssetsPanelProps> = ({
                 <input
                     type="file"
                     id="asset-upload"
+                    disabled={isUploading}
                     multiple
                     className="hidden"
                     onChange={handleFileUpload}
-                    accept="image/*,video/*,audio/*,.mkv,.flac,.ogg,.wav,.aac,.m4a,.mov,.webm,.webp,.svg,.bmp,.avif"
+                    accept="image/*,video/*,audio/*,.mkv,.flac,.ogg,.wav,.aac,.m4a,.mov,.webm,.webp,.svg,.bmp,.avif,.psd"
                 />
                 <div className="h-10 w-10 rounded-full bg-secondary flex items-center justify-center group-hover:scale-110 transition-transform">
                     {isUploading ? <Loader2 className="animate-spin text-primary" size={20} /> : <Upload className="text-muted-foreground group-hover:text-primary" size={20} />}

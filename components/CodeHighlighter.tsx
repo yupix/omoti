@@ -1,107 +1,51 @@
 import React, { useEffect, useState } from 'react';
-import { createHighlighter, type Highlighter } from 'shiki';
-import { ShikiMagicMove } from 'shiki-magic-move/react';
-import 'shiki-magic-move/dist/style.css';
-import { continueRender, delayRender } from 'remotion';
+import { createHighlighter, type Highlighter, type BundledLanguage, type BundledTheme } from 'shiki';
+import { useDelayRender } from 'remotion';
 
 interface CodeHighlighterProps {
     code: string;
     language?: string;
     theme?: string;
-    transitionDuration?: number; // ms
 }
 
-// Singleton to avoid re-creating the highlighter which is expensive
-let highlighterInstance: Highlighter | null = null;
 let highlighterPromise: Promise<Highlighter> | null = null;
 
-export const CodeHighlighter: React.FC<CodeHighlighterProps> = ({
-    code,
-    language = 'typescript',
-    theme = 'dark-plus',
-    transitionDuration = 800
-}) => {
-    // Always initialize to null to ensure hydration matches server (which should be null)
-    const [highlighter, setHighlighter] = useState<Highlighter | null>(null);
-    // Use a ref to track if we've already handled the delayRender
-    const handleRef = React.useRef<number | null>(null);
-
-    // Initialize/Load
+export const CodeHighlighter = React.memo(function CodeHighlighter({ code, language = 'typescript', theme = 'dark-plus' }: CodeHighlighterProps) {
+    const [ready, setReady] = useState<{ highlighter: Highlighter; language: string; theme: string } | null>(null);
+    const { delayRender, continueRender } = useDelayRender();
     useEffect(() => {
-        // If we have an instance already, check if it has the required language before setting
-        if (highlighterInstance && !highlighter) {
-            if (highlighterInstance.getLoadedLanguages().includes(language as any)) {
-                setHighlighter(highlighterInstance);
-            }
-        }
-
-        if (handleRef.current === null) {
-            handleRef.current = delayRender('Highlight Code Load');
-        }
-
+        const handle = delayRender('Load syntax highlighting');
         let mounted = true;
-
         const load = async () => {
             try {
                 if (!highlighterPromise) {
-                    highlighterPromise = createHighlighter({
-                        themes: ['dark-plus', theme as any],
-                        langs: ['javascript', 'typescript', 'css', 'html', 'json', 'tsx', 'jsx', 'bash', 'yaml', language as any],
-                    });
+                    highlighterPromise = createHighlighter({ themes: ['dark-plus'], langs: ['typescript'] });
+                    highlighterPromise.catch(() => { highlighterPromise = null; });
                 }
-
-                const h = await highlighterPromise;
-                highlighterInstance = h;
-
-                // Ensure resource is loaded
-                const promises = [];
-                if (!h.getLoadedLanguages().includes(language as any)) {
-                    promises.push(h.loadLanguage(language as any));
-                }
-                if (!h.getLoadedThemes().includes(theme as any)) {
-                    promises.push(h.loadTheme(theme as any));
-                }
-
-                if (promises.length > 0) {
-                    await Promise.all(promises);
-                }
-
-                if (mounted) {
-                    setHighlighter(h);
-                    if (handleRef.current !== null) {
-                        continueRender(handleRef.current);
-                        handleRef.current = null;
-                    }
-                }
-            } catch (err) {
-                console.error("Failed to load highlighter", err);
-                if (handleRef.current !== null) {
-                    continueRender(handleRef.current);
-                    handleRef.current = null;
-                }
+                const highlighter = await highlighterPromise;
+                await Promise.all([
+                    highlighter.loadLanguage(language as BundledLanguage),
+                    highlighter.loadTheme(theme as BundledTheme),
+                ]);
+                if (mounted) setReady({ highlighter, language, theme });
+            } catch (error) {
+                console.error('Failed to load syntax highlighting:', error);
+            } finally {
+                continueRender(handle);
             }
         };
+        void load();
+        return () => { mounted = false; continueRender(handle); };
+    }, [language, theme, delayRender, continueRender]);
 
-        load();
-
-        return () => {
-            mounted = false;
-        };
-    }, [language, theme]);
-
-    if (!highlighter) {
-        // Render a placeholder with the raw code to reduce layout shift/flash, but hidden?
-        // Or just null. Null is safer for hydration if we assume server renders null.
-        return <pre className="opacity-0">{code}</pre>;
-    }
-
-    return (
-        <ShikiMagicMove
-            lang={language as any}
-            theme={theme as any}
-            highlighter={highlighter}
-            code={code}
-            options={{ duration: transitionDuration, stagger: 0.3, lineNumbers: false }}
-        />
-    );
-};
+    // Render the current frame's code directly. CSS transitions depend on playback
+    // history and can leave tokens invisible when seeking or rendering a still.
+    const tokens = ready?.language === language && ready.theme === theme
+        ? ready.highlighter.codeToTokens(code, { lang: language as BundledLanguage, theme: theme as BundledTheme }).tokens : null;
+    return <pre style={{ margin: 0, fontFamily: 'monospace', fontSize: 'inherit', lineHeight: 1.5, color: '#d4d4d4', whiteSpace: 'pre-wrap', overflowWrap: 'anywhere' }}>
+        <code>{tokens ? tokens.map((line, index) => <React.Fragment key={index}>
+            {index > 0 && '\n'}
+            {line.map((token, tokenIndex) => <span key={tokenIndex} style={{ color: token.color }}>{token.content}</span>)}
+        </React.Fragment>) : code}</code>
+    </pre>;
+});
