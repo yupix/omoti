@@ -35,10 +35,26 @@ The renderer safely clamps long fades to the clip length; do not change an exist
 Keep subtitle timing aligned to speech unless the user explicitly requests a timing change. Do not silently shorten or remove dialogue.
 Use a concise summary and reasons in the user's language. Return a concrete requested edit, no empty operations.`;
 
+// Reads the body incrementally so an oversized project is rejected without ever
+// being parsed; returns null once the limit is passed.
+async function readLimitedText(req: NextRequest, limit: number) {
+    const reader = req.body?.getReader();
+    if (!reader) return req.text();
+    const decoder = new TextDecoder();
+    let text = '';
+    for (;;) {
+        const { done, value } = await reader.read();
+        if (done) return text + decoder.decode();
+        text += decoder.decode(value, { stream: true });
+        if (text.length > limit) { await reader.cancel(); return null; }
+    }
+}
+
 export async function POST(req: NextRequest) {
+    const raw = await readLimitedText(req, MAX_EDIT_REQUEST_CHARS);
+    if (raw === null) return NextResponse.json({ error: 'プロジェクトが大きすぎます。素材データをURL参照にするか、対象を小さくしてください。' }, { status: 413 });
     let body: unknown;
-    try { body = await req.json(); } catch { return NextResponse.json({ error: 'Invalid JSON request.' }, { status: 400 }); }
-    if (JSON.stringify(body).length > MAX_EDIT_REQUEST_CHARS) return NextResponse.json({ error: 'プロジェクトが大きすぎます。素材データをURL参照にするか、対象を小さくしてください。' }, { status: 413 });
+    try { body = JSON.parse(raw); } catch { return NextResponse.json({ error: 'Invalid JSON request.' }, { status: 400 }); }
     const parsed = requestSchema.safeParse(body);
     if (!parsed.success) return NextResponse.json({ error: '編集対象またはAI設定が不正です。', issues: parsed.error.issues.map(issue => `${issue.path.join('.')}: ${issue.message}`) }, { status: 400 });
     const { project, selectedIds, currentFrame, prompt, provider, apiKey, model } = parsed.data;

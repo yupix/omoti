@@ -1,5 +1,5 @@
 import OpenAI from 'openai';
-import { GoogleGenerativeAI } from '@google/generative-ai';
+import { GoogleGenerativeAI, GoogleGenerativeAIFetchError } from '@google/generative-ai';
 
 export type AiProvider = 'openai' | 'gemini' | 'commandcode';
 export type AiMessage = { role: 'user' | 'assistant'; content: string };
@@ -10,7 +10,10 @@ export class AiRequestError extends Error {
 }
 
 export function aiErrorStatus(error: unknown) {
-    return error instanceof AiRequestError ? error.status : error instanceof OpenAI.APIError ? error.status || 502 : 502;
+    if (error instanceof AiRequestError) return error.status;
+    if (error instanceof OpenAI.APIError) return error.status || 502;
+    if (error instanceof GoogleGenerativeAIFetchError) return error.status || 502;
+    return 502;
 }
 
 // Shared transport for generation and editing; neither path silently falls back

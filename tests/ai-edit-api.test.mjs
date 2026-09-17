@@ -110,12 +110,14 @@ test('request size limit accepts the exact boundary and rejects one character ov
 });
 
 test('authentication and temporary provider failures return errors without replacement or repair', async t => {
-    for (const status of [401, 429, 503]) {
-        const calls = mockApi(t, [plan], status);
-        const response = await edit();
-        assert.equal(response.status, status);
-        assert.equal((await response.json()).plan, undefined);
-        assert.equal(calls.length, 1);
+    for (const provider of ['commandcode', 'gemini']) {
+        for (const status of [401, 429, 503]) {
+            const calls = mockApi(t, [plan], status);
+            const response = await edit({ provider });
+            assert.equal(response.status, status, `${provider} ${status}`);
+            assert.equal((await response.json()).plan, undefined);
+            assert.equal(calls.length, 1);
+        }
     }
 });
 
