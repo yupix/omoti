@@ -327,35 +327,45 @@ export default function Editor() {
 
     const selectedClip = clips.find(c => c.id === selectedClipId);
 
+    const selectedClipContent = selectedClip?.content;
+    const selectedClipType = selectedClip?.type;
+
     // Parse PSD layers when a tachie clip is selected
     useEffect(() => {
-        if (selectedClip && selectedClip.type === 'tachie') {
-            const loadLayers = async () => {
-                try {
-                    const psd = await loadPsd(selectedClip.content, undefined, true);
+        let cancelled = false;
+        setAvailableLayers([]);
+        setPathsWithChildren(new Set());
+        setCollapsedPaths(new Set());
+        if (!selectedClipId || selectedClipType !== 'tachie' || !selectedClipContent) return;
 
-                    const structure = describePsd(psd);
-                    const nodes = [...structure.nodes].reverse();
-                    const names = nodes.map(node => node.path);
-                    const defaultVisible = nodes.filter(node => node.visible).map(node => node.path);
-                    const withChildren = nodes.filter(node => node.group).map(node => node.path);
-                    setAvailableLayers(names);
-                    setPathsWithChildren(new Set(withChildren));
+        const loadLayers = async () => {
+            try {
+                const psd = await loadPsd(selectedClipContent, undefined, true);
+                if (cancelled) return;
 
-                    // Initialize tachieLayers if empty
-                    if ((!selectedClip.tachieLayers || selectedClip.tachieLayers.length === 0) && !selectedClip.mouthOpenLayers?.length && !selectedClip.mouthClosedLayers?.length) {
-                        handleUpdateClip('tachieLayers', defaultVisible);
-                    }
-                } catch (e) {
-                    console.error('Failed to parse PSD layers:', e);
-                    setAvailableLayers([]);
-                }
-            };
-            loadLayers();
-        } else {
-            setAvailableLayers([]);
-        }
-    }, [selectedClip?.id, selectedClip?.content, selectedClip?.type]);
+                const nodes = [...describePsd(psd).nodes].reverse();
+                const defaultVisible = nodes.filter(node => node.visible).map(node => node.path);
+                setAvailableLayers(nodes.map(node => node.path));
+                setPathsWithChildren(new Set(nodes.filter(node => node.group).map(node => node.path)));
+
+                // Read the latest configuration and update only the clip/source
+                // that started this request, preserving edits made while loading.
+                setClips(prev => {
+                    if (cancelled) return prev;
+                    const target = prev.find(clip => clip.id === selectedClipId && clip.type === 'tachie' && clip.content === selectedClipContent);
+                    if (!target || target.tachieLayers?.length || target.mouthOpenLayers?.length || target.mouthClosedLayers?.length) return prev;
+                    return prev.map(clip => clip === target ? { ...clip, tachieLayers: defaultVisible } : clip);
+                });
+            } catch (e) {
+                if (cancelled) return;
+                console.error('Failed to parse PSD layers:', e);
+                setAvailableLayers([]);
+                setPathsWithChildren(new Set());
+            }
+        };
+        void loadLayers();
+        return () => { cancelled = true; };
+    }, [selectedClipId, selectedClipContent, selectedClipType]);
 
     // Sync local volume state when selected clip changes
     useEffect(() => {
