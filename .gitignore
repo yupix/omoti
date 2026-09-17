@@ -42,3 +42,6 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# Incomplete uploads awaiting format validation
+/.uploads-staging/

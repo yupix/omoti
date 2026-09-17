@@ -148,3 +148,42 @@ test('unresponsive media metadata has a deadline and releases its resource', asy
     assert.deepEqual(await cancelled, { width: 600, height: 600 });
     assert.equal(images[1].src, undefined);
 });
+
+for (const type of ['image', 'video', 'audio', 'tachie']) {
+    test(`cancellation after saving keeps the ${type} asset with available or fallback metadata`, async t => {
+        const instances = mockXhr(t);
+        const elements = [];
+        class Media extends EventTarget {
+            constructor() { super(); elements.push(this); }
+            removeAttribute(name) { delete this[name]; }
+            load() {}
+        }
+        globalMock(t, 'Image', Media);
+        globalMock(t, 'document', { createElement: () => new Media() });
+        const controller = new AbortController();
+        const extension = { image: 'png', video: 'mp4', audio: 'wav', tachie: 'psd' }[type];
+        // Classification must follow the server's detected format, not the local name.
+        const uploading = uploadAsset(new File([type === 'tachie' ? psdHeader() : 'bytes'], 'source.bin'), () => {}, controller.signal);
+        instances[0].respond(200, { name: 'saved.' + extension, url: '/uploads/saved.' + extension });
+        await new Promise(resolve => setImmediate(resolve));
+        controller.abort();
+        const asset = await uploading;
+        assert.equal(asset.type, type);
+        assert.equal(asset.name, 'saved.' + extension);
+        assert.equal(asset.duration, 0);
+        if (type !== 'audio') {
+            assert.equal(asset.width, type === 'tachie' ? 2400 : 600);
+            assert.equal(asset.height, type === 'tachie' ? 3200 : 600);
+        }
+        assert.ok(elements.every(element => element.src === undefined));
+    });
+}
+
+test('cancellation before the server completes still rejects without returning an asset', async t => {
+    const instances = mockXhr(t);
+    const controller = new AbortController();
+    const uploading = uploadAsset(new File(['bytes'], 'image.png'), () => {}, controller.signal);
+    controller.abort();
+    await assert.rejects(uploading, { name: 'AbortError' });
+    assert.equal(instances[0].aborted, true);
+});

@@ -258,8 +258,8 @@ export default function Editor() {
                 if (data.files) {
                     const mapped = await Promise.all(data.files.map(async (f: any) => {
                         const fullUrl = `/uploads/${f.name}`;
-                        const type = f.name.match(/\.(mp4|webm|mov)$/i) ? 'video' :
-                            f.name.match(/\.(mp3|wav|ogg|m4a)$/i) ? 'audio' :
+                        const type = f.name.match(/\.(mp4|webm|mov|mkv)$/i) ? 'video' :
+                            f.name.match(/\.(mp3|wav|ogg|m4a|aac|flac)$/i) ? 'audio' :
                                 f.name.match(/\.psd$/i) ? 'tachie' : 'image';
                         let duration = 0;
                         if (type === 'video' || type === 'audio') {

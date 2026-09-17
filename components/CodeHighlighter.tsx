@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useLayoutEffect, useRef, useState } from 'react';
 import { createHighlighter, type Highlighter, type BundledLanguage, type BundledTheme } from 'shiki';
 import { useDelayRender } from 'remotion';
 
@@ -13,8 +13,11 @@ let highlighterPromise: Promise<Highlighter> | null = null;
 export const CodeHighlighter = React.memo(function CodeHighlighter({ code, language = 'typescript', theme = 'dark-plus' }: CodeHighlighterProps) {
     const [ready, setReady] = useState<{ highlighter: Highlighter; language: string; theme: string } | null>(null);
     const { delayRender, continueRender } = useDelayRender();
-    useEffect(() => {
-        const handle = delayRender('Load syntax highlighting');
+    const [initialHandle] = useState(() => delayRender('Load syntax highlighting'));
+    const renderHandle = useRef<number | null>(initialHandle);
+    useLayoutEffect(() => {
+        const handle = renderHandle.current ?? delayRender('Load syntax highlighting');
+        renderHandle.current = handle;
         let mounted = true;
         const load = async () => {
             try {
@@ -30,13 +33,25 @@ export const CodeHighlighter = React.memo(function CodeHighlighter({ code, langu
                 if (mounted) setReady({ highlighter, language, theme });
             } catch (error) {
                 console.error('Failed to load syntax highlighting:', error);
-            } finally {
                 continueRender(handle);
+                if (renderHandle.current === handle) renderHandle.current = null;
             }
         };
         void load();
-        return () => { mounted = false; continueRender(handle); };
+        return () => {
+            mounted = false;
+            continueRender(handle);
+            if (renderHandle.current === handle) renderHandle.current = null;
+        };
     }, [language, theme, delayRender, continueRender]);
+
+    useLayoutEffect(() => {
+        if (ready?.language === language && ready.theme === theme && renderHandle.current !== null) {
+            // Release only after the highlighted tokens have reached the DOM.
+            continueRender(renderHandle.current);
+            renderHandle.current = null;
+        }
+    }, [ready, language, theme, continueRender]);
 
     // Render the current frame's code directly. CSS transitions depend on playback
     // history and can leave tokens invisible when seeking or rendering a still.

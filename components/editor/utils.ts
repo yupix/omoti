@@ -59,15 +59,16 @@ export interface AssetFolder {
 
 
 export async function uploadAsset(file: File, onProgress: (progress: UploadProgress) => void, signal: AbortSignal): Promise<Asset> {
-    const type: Asset['type'] = /\.psd$/i.test(file.name) ? 'tachie'
-        : /\.(mp4|webm|mov|mkv)$/i.test(file.name) ? 'video'
-        : /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(file.name) ? 'audio' : 'image';
-    const psdDimensions = type === 'tachie' ? await readPsdDimensions(file) : undefined;
     const data = await uploadFile(file, onProgress, signal);
+    // The server determines the format from bytes and returns its canonical suffix.
+    const type: Asset['type'] = /\.psd$/i.test(data.name) ? 'tachie'
+        : /\.(mp4|webm|mov|mkv)$/i.test(data.name) ? 'video'
+        : /\.(mp3|wav|ogg|m4a|aac|flac)$/i.test(data.name) ? 'audio' : 'image';
+    const psdDimensions = type === 'tachie' ? await readPsdDimensions(file).catch(() => ({ width: 600, height: 600 })) : undefined;
     const url = data.url;
     onProgress({ loaded: file.size, total: file.size, phase: 'processing' });
     const duration = type === 'video' || type === 'audio' ? await getMediaDuration(url, type, signal) : 0;
     const dimensions = psdDimensions || (type === 'video' || type === 'image' ? await getMediaDimensions(url, type, signal) : undefined);
-    signal.throwIfAborted();
+    // Once saved, keep the asset even if metadata loading was cancelled.
     return { name: data.name, url, type, duration, ...dimensions };
 }
