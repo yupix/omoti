@@ -22,6 +22,9 @@ import { getVoicevoxSpeakers, VoicevoxSpeaker } from '@/lib/voicevox';
 import { PropertiesPanel } from './PropertiesPanel';
 import { AssetsPanel } from './AssetsPanel';
 import { AiGeneratorDialog } from './AiGeneratorDialog';
+import { AiEditorDialog } from './AiEditorDialog';
+import { applyEditPlan, sameProject, type EditPlan, type EditorProject } from '@/lib/ai-edit';
+import { recordHistory } from '@/lib/editor-history';
 import { IconBrowser } from './IconBrowser';
 import { Sparkles } from 'lucide-react';
 import { Group, Panel, Separator } from 'react-resizable-panels';
@@ -102,6 +105,7 @@ export default function Editor() {
     const [isPreviewFullscreen, setIsPreviewFullscreen] = useState(false);
     const [language, setLanguage] = useState(() => i18n.resolvedLanguage || 'en');
     const [isAiOpen, setIsAiOpen] = useState(false);
+    const [isAiEditOpen, setIsAiEditOpen] = useState(false);
 
     const currentFrameRef = useRef(0);
     const mainPlayerRef = useRef<PlayerRef | null>(null);
@@ -717,25 +721,9 @@ export default function Editor() {
         const timeout = setTimeout(() => {
             const currentState = { clips, tracks, primaryColor };
 
-            // Prevent pushing duplicate states sequentially
-            const lastState = historyRef.current[historyIndexRef.current];
-            if (lastState && JSON.stringify(lastState) === JSON.stringify(currentState)) {
-                return;
-            }
-
-            // If we are not at the end of the history (i.e. we undid something), truncate future history
-            if (historyIndexRef.current < historyRef.current.length - 1) {
-                historyRef.current = historyRef.current.slice(0, historyIndexRef.current + 1);
-            }
-
-            historyRef.current.push(currentState);
-
-            // Limit history to 50 items to prevent huge memory usage in localStorage/RAM
-            if (historyRef.current.length > 50) {
-                historyRef.current.shift();
-            } else {
-                historyIndexRef.current++;
-            }
+            const history = recordHistory(historyRef.current, historyIndexRef.current, currentState);
+            historyRef.current = history.states;
+            historyIndexRef.current = history.index;
         }, 500);
 
         return () => clearTimeout(timeout);
@@ -1001,6 +989,20 @@ export default function Editor() {
         } finally {
             setIsExporting(false);
         }
+    };
+
+    const handleAiEdit = (original: EditorProject, plan: EditPlan, selectedIds?: string[]) => {
+        const current = { clips, tracks, primaryColor };
+        if (!sameProject(current, original)) throw new Error('タイムラインが変更されました。編集案を作り直してください。');
+        const next = applyEditPlan(current, plan, selectedIds);
+        // Capture both sides immediately so even Ctrl+Z before the debounce can undo the whole edit.
+        const history = recordHistory(historyRef.current, historyIndexRef.current, current, next);
+        historyRef.current = history.states;
+        historyIndexRef.current = history.index;
+        isNavigatingHistoryRef.current = true;
+        setClips(next.clips);
+        setTracks(next.tracks);
+        if (selectedClipId && !next.clips.some(clip => clip.id === selectedClipId)) setSelectedClipId(null);
     };
 
     const handleAiGenerate = (newClips: Clip[]) => {
@@ -1277,6 +1279,10 @@ export default function Editor() {
                                         <Sparkles className="mr-2 size-3" />
                                         AI Create
                                     </Button>
+                                    <Button className="ml-2 h-8" size="sm" variant="outline" disabled={!isLoaded || !clips.length}
+                                        onClick={() => { player?.pause(); setIsAiEditOpen(true); }}>
+                                        <Sparkles className="mr-2 size-3" />AI編集
+                                    </Button>
                                 </div>
                             </header>
 
@@ -1476,6 +1482,8 @@ export default function Editor() {
                 </div>
             )}
 
+            {isAiEditOpen && <AiEditorDialog project={{ clips, tracks, primaryColor }} selectedClipId={selectedClipId}
+                currentFrame={getEditorFrame()} onOpenChange={setIsAiEditOpen} onApply={handleAiEdit} />}
             <AiGeneratorDialog
                 open={isAiOpen}
                 onOpenChange={setIsAiOpen}

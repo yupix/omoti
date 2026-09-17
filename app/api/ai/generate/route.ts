@@ -1,9 +1,8 @@
 
 import { NextRequest, NextResponse } from 'next/server';
-import OpenAI from 'openai';
+import { requestAiContent, aiErrorStatus } from '@/lib/ai-provider';
 import { z } from 'zod';
 
-import { GoogleGenerativeAI } from '@google/generative-ai';
 import type { Clip } from '@/types';
 import { createSubtitleClips, getSceneLayout, getScriptIssues, MAX_LAYOUT_REPAIRS, splitSubtitlePages } from '@/lib/ai-video';
 import { arrangeGeneratedTracks, getTimelineIssues } from '@/lib/generated-timeline';
@@ -160,65 +159,7 @@ export async function POST(req: NextRequest) {
                         { role: 'user', content: `The generated video failed validation. Fix the following problems and return the complete corrected JSON. Preserve the requested content and dialogue; change only what is necessary.\n${issues.slice(0, 20).join('\n')}` },
                     );
                 }
-                let content;
-                if (provider === 'gemini') {
-                    const geminiKey = apiKey || process.env.GEMINI_API_KEY || process.env.GOOGLE_API_KEY;
-                    if (!geminiKey) return NextResponse.json({ error: 'No Gemini API Key' }, { status: 400 });
-                    const genAI = new GoogleGenerativeAI(geminiKey);
-                    const gemini = genAI.getGenerativeModel({
-                        model: 'gemini-flash-latest',
-                        systemInstruction,
-                        generationConfig: { responseMimeType: 'application/json' },
-                    });
-                    const result = await gemini.generateContent({
-                        contents: messages.map(message => ({
-                            role: message.role === 'assistant' ? 'model' : 'user',
-                            parts: [{ text: message.content }],
-                        })),
-                    });
-                    content = result.response.text();
-                } else {
-                    const isCommandCode = provider === 'commandcode';
-                    const providerKey = isCommandCode
-                        ? apiKey?.trim() || process.env.CMD_API_KEY?.trim()
-                        : apiKey || process.env.OPENAI_API_KEY;
-                    if (!providerKey) {
-                        return NextResponse.json({
-                            error: isCommandCode ? 'Enter a Command Code API key or set CMD_API_KEY on the server.' : 'No OpenAI API Key',
-                        }, { status: 400 });
-                    }
-                    const client = new OpenAI({
-                        apiKey: providerKey,
-                        timeout: 120_000,
-                        maxRetries: 0,
-                        ...(isCommandCode ? {
-                            baseURL: 'https://api.commandcode.ai/provider/v1',
-                            organization: null,
-                            project: null,
-                        } : {}),
-                    });
-                    const modelId = isCommandCode ? model?.trim() || 'deepseek/deepseek-v4-flash' : 'gpt-4o';
-                    if (isCommandCode && modelId.startsWith('claude-')) {
-                        const message = await client.post<{
-                            content: { type: string; text?: string }[];
-                        }>('/messages', {
-                            headers: { 'anthropic-version': '2023-06-01' },
-                            body: {
-                                model: modelId, max_tokens: 16_384,
-                                system: systemInstruction, messages,
-                            },
-                        });
-                        content = message.content?.filter(block => block.type === 'text').map(block => block.text || '').join('');
-                    } else {
-                        const completion = await client.chat.completions.create({
-                            model: modelId,
-                            messages: [{ role: 'system', content: systemInstruction }, ...messages],
-                            ...(isCommandCode ? {} : { response_format: { type: 'json_object' as const } }),
-                        });
-                        content = completion.choices?.[0]?.message?.content;
-                    }
-                }
-                if (!content?.trim()) throw new Error(`No content from ${provider}`);
+                const content = await requestAiContent({ provider, apiKey, model, systemInstruction, messages, signal: req.signal });
                 previousResponse = content;
                 try {
                     scriptData = JSON.parse(content.trim().replace(/^```(?:json)?\s*/i, '').replace(/```$/, '').trim());
@@ -240,7 +181,7 @@ export async function POST(req: NextRequest) {
         } catch (error) {
             return NextResponse.json({
                 error: error instanceof Error ? error.message : 'AI generation failed',
-            }, { status: error instanceof OpenAI.APIError ? error.status || 502 : 502 });
+            }, { status: aiErrorStatus(error) });
         }
 
         // Process Scenes to Generate Audio & Clips
