@@ -2,7 +2,12 @@ import type { Clip } from '../types';
 
 type TimedClip = Pick<Clip, 'id' | 'trackId' | 'startFrame' | 'durationInFrames'>;
 
-export function getTimelineIssues(clips: TimedClip[]): string[] {
+export function getTimelineIssues(clips: TimedClip[], originalClips: TimedClip[] = []): string[] {
+    const original = new Map(originalClips.map(clip => [clip.id, clip]));
+    const timingChanged = (clip: TimedClip) => {
+        const before = original.get(clip.id);
+        return !before || clip.trackId !== before.trackId || clip.startFrame !== before.startFrame || clip.durationInFrames !== before.durationInFrames;
+    };
     const issues: string[] = [];
     const ids = new Set<string>();
     const tracks = new Map<number, TimedClip[]>();
@@ -22,7 +27,8 @@ export function getTimelineIssues(clips: TimedClip[]): string[] {
         const sorted = [...track].sort((a, b) => a.startFrame - b.startFrame);
         let previous: TimedClip | undefined;
         for (const clip of sorted) {
-            if (previous && clip.startFrame < previous.startFrame + previous.durationInFrames) {
+            if (previous && clip.startFrame < previous.startFrame + previous.durationInFrames &&
+                (timingChanged(previous) || timingChanged(clip))) {
                 issues.push(`Track ${id}: ${previous.id} overlaps ${clip.id}`);
             }
             if (!previous || clip.startFrame + clip.durationInFrames > previous.startFrame + previous.durationInFrames) previous = clip;

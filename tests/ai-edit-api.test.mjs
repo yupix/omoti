@@ -132,3 +132,17 @@ test('cancelled requests never send or return an edit plan', async t => {
     assert.equal(response.status, 499);
     assert.equal((await response.json()).plan, undefined);
 });
+
+test('valid partial edits of normal editor state do not trigger unrelated AI repairs', async t => {
+    const existing = structuredClone(project);
+    Object.assign(existing.clips[0], { x: -20, animation: { type: 'fade', duration: 500 }, keyframes: { x: [{ frame: 30, value: 100 }, { frame: 10, value: -20 }] } });
+    const saved = structuredClone(existing);
+    const calls = mockApi(t, [plan]);
+    const response = await edit({ project: existing, selectedIds: ['caption'] });
+    assert.equal(response.status, 200);
+    const data = await response.json();
+    assert.deepEqual(data.plan, plan);
+    assert.equal(data.repairAttempts, 0);
+    assert.equal(calls.length, 1);
+    assert.deepEqual(existing, saved);
+});

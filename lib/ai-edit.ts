@@ -90,7 +90,9 @@ function box(clip: Clip) {
     const positioned = [clip.x, clip.y, clip.width, clip.height].some(value => typeof value === 'number');
     const xs = [clip.x || 0, ...(clip.keyframes?.x || []).map(key => key.value)];
     const ys = [clip.y || 0, ...(clip.keyframes?.y || []).map(key => key.value)];
-    return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs) + (clip.width || (positioned ? 400 : 1280)), bottom: Math.max(...ys) + (clip.height || (positioned ? 400 : 720)) };
+    const width = clip.width || (positioned ? 400 : 1280);
+    const height = clip.height || (positioned ? 400 : 720);
+    return { left: Math.min(...xs), top: Math.min(...ys), right: Math.max(...xs) + width, bottom: Math.max(...ys) + height, width, height };
 }
 
 export function applyEditPlan(project: EditorProject, value: unknown, selectedIds?: string[]): EditorProject {
@@ -128,23 +130,35 @@ export function applyEditPlan(project: EditorProject, value: unknown, selectedId
     }
     const clips = [...result.values()];
     if (clips.length > MAX_EDIT_CLIPS) issues.push(`The project can contain at most ${MAX_EDIT_CLIPS} clips for AI editing.`);
-    issues.push(...getTimelineIssues(clips));
+    issues.push(...getTimelineIssues(clips, project.clips));
     for (const clip of clips.filter(clip => touched.has(clip.id))) {
-        if (clip.type === 'shape' && !['rect', 'circle'].includes(clip.content)) issues.push(`${clip.id}: shape must be rect or circle.`);
-        if (clip.type === 'icon' && !/^[\w-]+:[\w-]+$/.test(clip.content)) issues.push(`${clip.id}: use an icon ID such as lucide:star.`);
-        if (clip.animation && clip.animation.type !== 'none' && (clip.animation.duration < 1 || clip.animation.duration > clip.durationInFrames)) issues.push(`${clip.id}: animation duration must fit the clip.`);
-        for (const [key, frames] of Object.entries(clip.keyframes || {})) {
+        const before = original.get(clip.id);
+        const changed = (key: keyof Clip) => JSON.stringify(clip[key]) !== JSON.stringify(before?.[key]);
+        const beforeKeyframes = before?.keyframes || {};
+        const changedKeyframes = Object.entries(clip.keyframes || {}).filter(([key, frames]) =>
+            JSON.stringify(frames) !== JSON.stringify(beforeKeyframes[key as keyof typeof beforeKeyframes]));
+        const layoutChanged = !before || (['x', 'y', 'width', 'height'] as const).some(changed) ||
+            (['x', 'y'] as const).some(key => JSON.stringify(clip.keyframes?.[key]) !== JSON.stringify(before.keyframes?.[key]));
+        if (changed('content') && clip.type === 'shape' && !['rect', 'circle'].includes(clip.content)) issues.push(`${clip.id}: shape must be rect or circle.`);
+        if (changed('content') && clip.type === 'icon' && !/^[\w-]+:[\w-]+$/.test(clip.content)) issues.push(`${clip.id}: use an icon ID such as lucide:star.`);
+        // The renderer sorts stored keyframes and clamps fades to the clip length.
+        // Validate only newly supplied values, preserving the editor's existing state.
+        if (changed('animation') && clip.animation && clip.animation.type !== 'none' && clip.animation.duration < 1) issues.push(`${clip.id}: animation duration must be positive.`);
+        for (const [key, frames] of changedKeyframes) {
             if (frames.some((frame, i) => !Number.isFinite(frame.value) || frame.frame < 0 || (i > 0 && frame.frame <= frames[i - 1].frame))) issues.push(`${clip.id}.${key}: keyframes must have finite values and increasing frames.`);
         }
         if (clip.type === 'audio') continue;
         const rect = box(clip);
-        if (rect.left < 0 || rect.top < 0 || rect.right > 1280 || rect.bottom > 720) issues.push(`${clip.id}: keep the clip and x/y keyframes inside the 1280x720 canvas.`);
+        const previousRect = before ? box(before) : { left: 0, top: 0, right: 1280, bottom: 720, width: 1280, height: 720 };
+        if (rect.left < Math.min(0, previousRect.left) || rect.top < Math.min(0, previousRect.top) ||
+            rect.right > Math.max(1280, previousRect.right) || rect.bottom > Math.max(720, previousRect.bottom)) {
+            issues.push(`${clip.id}: do not introduce or increase overflow outside the 1280x720 canvas.`);
+        }
         if (clip.type === 'text') {
-            const positioned = [clip.x, clip.y, clip.width, clip.height].some(value => typeof value === 'number');
-            const width = clip.width || (positioned ? 400 : 1280);
-            const height = clip.height || (positioned ? 400 : 720);
+            const { width, height } = rect;
             const lines = clip.content.split('\n').reduce((total, line) => total + Math.max(1, Math.ceil([...line].length / Math.max(1, Math.floor(width / 20)))), 0);
-            if (lines * 26 > height) issues.push(`${clip.id}: text is too long to remain readable. Shorten it or split it into consecutive text clips.`);
+            if ((!before || changed('content') || width !== previousRect.width || height !== previousRect.height) && lines * 26 > height) issues.push(`${clip.id}: text is too long to remain readable. Shorten it or split it into consecutive text clips.`);
+            if (!layoutChanged && !changed('startFrame') && !changed('durationInFrames')) continue;
             for (const other of clips) {
                 if (other.id === clip.id || other.type !== 'text' || clip.startFrame >= other.startFrame + other.durationInFrames || other.startFrame >= clip.startFrame + clip.durationInFrames) continue;
                 const b = box(other);

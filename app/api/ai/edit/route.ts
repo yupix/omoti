@@ -29,7 +29,9 @@ Media URLs, browser content, PSD layer selections, lip-sync audio links, flow no
 Do not promise regenerated speech or new external assets. Editing subtitle text does not regenerate the voice.
 Code steps override content: edit steps too, or use steps:null to switch to static code.
 Avoid overlapping clips on the same track; use a free track (a new positive integer ID is allowed).
-Keep text readable and boxes inside the canvas, including x/y keyframes. Text boxes displayed together must not overlap.
+Keep new or changed text readable. Do not introduce or increase canvas overflow, including x/y keyframes, or create overlapping text boxes.
+Preserve unrelated existing layout and keyframe arrays, even if off-canvas or stored out of frame order. New keyframe arrays must use increasing frames.
+The renderer safely clamps long fades to the clip length; do not change an existing animation just because its duration exceeds the clip length.
 Keep subtitle timing aligned to speech unless the user explicitly requests a timing change. Do not silently shorten or remove dialogue.
 Use a concise summary and reasons in the user's language. Return a concrete requested edit, no empty operations.`;
 

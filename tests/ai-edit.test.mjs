@@ -50,7 +50,7 @@ test('rejects nonexistent IDs, duplicate operations, duplicate additions and emp
 });
 
 test('rejects unsafe timing, geometry, text overlap and invalid keyframes', () => {
-    for (const patch of [{ startFrame: -1 }, { durationInFrames: 0 }, { durationInFrames: 0.5 }, { x: 1279 }, { y: -1 }, { width: 0 }, { animation: { type: 'fade', duration: 100 } }, { keyframes: { x: [{ frame: 2, value: 100 }, { frame: 2, value: 200 }] } }, { keyframes: { x: [{ frame: 0, value: 1500 }] } }, { content: '長文'.repeat(500) }]) {
+    for (const patch of [{ startFrame: -1 }, { durationInFrames: 0 }, { durationInFrames: 0.5 }, { x: 1279 }, { y: -1 }, { width: 0 }, { animation: { type: 'fade', duration: 0 } }, { keyframes: { x: [{ frame: 2, value: 100 }, { frame: 2, value: 200 }] } }, { keyframes: { x: [{ frame: 0, value: 1500 }] } }, { content: '長文'.repeat(500) }]) {
         assert.throws(() => applyEditPlan(project(), plan(update('caption', patch))), JSON.stringify(patch));
     }
     assert.throws(() => applyEditPlan(project(), plan(addition({ startFrame: 30, y: 20 }))), /overlap/i);
@@ -126,4 +126,58 @@ test('track limit rejects a new track at capacity but allows reuse of a free tra
     const base = { ...project(), tracks: Array.from({ length: MAX_EDIT_CLIPS }, (_, i) => ({ id: i + 1, name: `Track ${i + 1}` })) };
     assert.throws(() => applyEditPlan(base, plan(addition({ trackId: MAX_EDIT_CLIPS + 1 }))), /at most 1000 tracks/);
     assert.equal(applyEditPlan(base, plan(addition({ trackId: 2 }))).tracks.length, MAX_EDIT_CLIPS);
+});
+
+test('unrelated edits preserve unsorted keyframes, off-canvas positions and long fades', () => {
+    for (const existing of [
+        { keyframes: { x: [{ frame: 30, value: 120 }, { frame: 10, value: 100 }] } },
+        { x: -20 },
+        { animation: { type: 'fade', duration: 500 } },
+    ]) {
+        const base = project([textClip('caption', existing)]);
+        const saved = structuredClone(base);
+        for (const patch of [{ title: '改名' }, { volume: 0.5 }, { content: '短い字幕' }]) {
+            const result = applyEditPlan(base, plan(update('caption', patch)), ['caption']);
+            assert.deepEqual(result.clips[0], { ...base.clips[0], ...patch });
+            assert.deepEqual(base, saved);
+        }
+    }
+});
+
+test('keyframe validation is per changed property and does not rewrite other arrays', () => {
+    const base = project([textClip('caption', { keyframes: { x: [{ frame: 30, value: 120 }, { frame: 10, value: 100 }] } })]);
+    const opacity = [{ frame: 0, value: 0 }, { frame: 30, value: 1 }];
+    const result = applyEditPlan(base, plan(update('caption', { keyframes: { opacity } })));
+    assert.deepEqual(result.clips[0].keyframes, { ...base.clips[0].keyframes, opacity });
+    assert.equal(result.clips[0].keyframes.x, base.clips[0].keyframes.x);
+    assert.throws(() => applyEditPlan(base, plan(update('caption', { keyframes: { opacity: [...opacity].reverse() } }))), /increasing frames/);
+    assert.throws(() => applyEditPlan(base, plan(update('caption', { keyframes: { x: [{ frame: 5, value: 100 }, { frame: 5, value: 110 }] } }))), /increasing frames/);
+});
+
+test('fade duration can exceed a shortened clip because rendering clamps the fades', () => {
+    const base = project([textClip('caption', { animation: { type: 'fade', duration: 500 } })]);
+    const result = applyEditPlan(base, plan(update('caption', { durationInFrames: 30 })));
+    assert.equal(result.clips[0].animation.duration, 500);
+    assert.equal(result.clips[0].durationInFrames, 30);
+    assert.equal(applyEditPlan(base, plan(update('caption', { animation: { type: 'fade', duration: 600 } }))).clips[0].animation.duration, 600);
+});
+
+test('canvas checks permit inherited overflow or an improvement, but reject new or worse overflow', () => {
+    const base = project([textClip('caption', { x: -20 })]);
+    assert.equal(applyEditPlan(base, plan(update('caption', { y: 500 }))).clips[0].x, -20);
+    assert.equal(applyEditPlan(base, plan(update('caption', { x: -10 }))).clips[0].x, -10);
+    for (const patch of [{ x: -21 }, { y: 650 }, { keyframes: { x: [{ frame: 0, value: -21 }] } }]) {
+        assert.throws(() => applyEditPlan(base, plan(update('caption', patch))), /canvas/);
+    }
+    assert.throws(() => applyEditPlan(base, plan(addition({ x: 1270 }))), /canvas/);
+});
+
+test('unrelated edits tolerate existing text and track overlaps and readability warnings', () => {
+    const base = project([textClip('caption', { width: 20, height: 26 }), textClip('other')]);
+    assert.equal(applyEditPlan(base, plan(update('caption', { title: '改名', style: { color: '#fff' } })), ['caption']).clips[0].title, '改名');
+    assert.throws(() => applyEditPlan(base, plan(update('caption', { durationInFrames: 100 }))), /overlap/i);
+    assert.throws(() => applyEditPlan(base, plan(update('caption', { width: 40 }))), /text overlaps/);
+    const single = project([base.clips[0]]);
+    assert.equal(applyEditPlan(single, plan(update('caption', { y: 100 }))).clips[0].y, 100);
+    assert.throws(() => applyEditPlan(single, plan(update('caption', { content: '長文'.repeat(100) }))), /too long/);
 });
