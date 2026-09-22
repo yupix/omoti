@@ -5,8 +5,9 @@ import ts from 'typescript';
 import { describePsd } from '../lib/psd-structure.ts';
 
 // Run the editor's actual effect with controlled promises and state setters.
-// Keeping the effect in Editor avoids adding a production abstraction for tests.
-const source = ts.createSourceFile('Editor.tsx', readFileSync(new URL('../components/editor/Editor.tsx', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
+// The layer state in useTachieLayers is keyed to the clip identity, so the
+// harness derives the visible values the same way the hook does.
+const source = ts.createSourceFile('useTachieLayers.ts', readFileSync(new URL('../components/editor/useTachieLayers.ts', import.meta.url), 'utf8'), ts.ScriptTarget.Latest, true, ts.ScriptKind.TSX);
 const effects = [];
 function visit(node) {
     if (ts.isCallExpression(node) && node.expression.getText(source) === 'useEffect' && node.arguments[0]?.getText(source).includes('loadPsd(')) effects.push(node.arguments[0]);
@@ -15,35 +16,54 @@ function visit(node) {
 visit(source);
 assert.equal(effects.length, 1, 'find the PSD selection effect');
 const effectSource = ts.transpileModule('const effect = ' + effects[0].getText(source), { compilerOptions: { target: ts.ScriptTarget.ES2022 } }).outputText;
-const captures = ['selectedClip', 'selectedClipId', 'selectedClipContent', 'selectedClipType', 'loadPsd', 'describePsd', 'setAvailableLayers', 'setPathsWithChildren', 'setCollapsedPaths', 'setClips', 'handleUpdateClip', 'console'];
+const captures = ['selectedClipId', 'selectedClipContent', 'selectedClipType', 'loadPsd', 'describePsd', 'setLoadedLayers', 'setClips', 'console'];
 const createEffect = new Function(...captures, effectSource + '\nreturn effect;');
 const clip = (id, content = id + '.psd') => ({ id, content, type: 'tachie' });
 const psd = name => ({ width: 1, height: 1, children: [{ name, children: [{ name: 'visible' }, { name: 'hidden', hidden: true }] }] });
 const tick = () => new Promise(resolve => setImmediate(resolve));
 
 function editor(clips) {
-    const state = { clips, selectedId: null, layers: [], folders: new Set(), collapsed: new Set() };
+    const state = { clips, selectedId: null, loaded: null, collapsedState: null };
     const requests = [];
     const errors = [];
     let cleanup;
     let queueUpdates = false;
     const updates = [];
     const setClips = update => queueUpdates ? updates.push(update) : state.clips = update(state.clips);
+    // Mirror of the hook: values are only visible when stored under the
+    // currently selected clip's id + content + type.
+    const selected = () => state.clips.find(item => item.id === state.selectedId);
+    const matchesSelected = s => !!s && s.clipId === state.selectedId && s.content === selected()?.content && s.type === selected()?.type;
+    Object.defineProperties(state, {
+        layers: {
+            get: () => matchesSelected(state.loaded) ? state.loaded.available : [],
+            set: v => { state.loaded = { ...selectedKey(), available: v, withChildren: state.loaded?.withChildren ?? new Set() }; },
+        },
+        folders: {
+            get: () => matchesSelected(state.loaded) ? state.loaded.withChildren : new Set(),
+            set: v => { state.loaded = { ...selectedKey(), available: state.loaded?.available ?? [], withChildren: v }; },
+        },
+        collapsed: {
+            get: () => matchesSelected(state.collapsedState) ? state.collapsedState.paths : new Set(),
+            set: v => { state.collapsedState = { ...selectedKey(), paths: v }; },
+        },
+    });
+    function selectedKey() {
+        const c = selected();
+        return { clipId: state.selectedId, content: c?.content, type: c?.type };
+    }
     return {
         state, requests, errors,
         select(id) {
             cleanup?.();
             state.selectedId = id;
-            const selected = state.clips.find(item => item.id === id);
-            cleanup = createEffect(selected, id, selected?.content, selected?.type,
+            const c = selected();
+            cleanup = createEffect(id, c?.content, c?.type,
                 (url, base, metadataOnly) => {
                     assert.equal(metadataOnly, true);
                     return new Promise((resolve, reject) => requests.push({ url, resolve, reject }));
                 }, describePsd,
-                layers => { state.layers = layers; },
-                folders => { state.folders = folders; },
-                collapsed => { state.collapsed = collapsed; }, setClips,
-                (key, value) => setClips(prev => prev.map(item => item.id === state.selectedId ? { ...item, [key]: value } : item)),
+                v => { state.loaded = v; }, setClips,
                 { error: (...args) => errors.push(args) })();
         },
         unmount: () => cleanup?.(),

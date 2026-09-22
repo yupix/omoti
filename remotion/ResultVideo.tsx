@@ -439,11 +439,13 @@ const RenderClip: React.FC<RenderClipProps> = ({ clip, assetBaseUrl }) => {
     return null;
 }
 
-export const ResultVideo: React.FC<{
+export type ResultVideoProps = {
     clips: Clip[];
     primaryColor: string;
     assetBaseUrl?: string;
-}> = ({ clips, primaryColor, assetBaseUrl }) => {
+};
+
+export const ResultVideo: React.FC<ResultVideoProps> = ({ clips, primaryColor, assetBaseUrl }) => {
     const { fps } = useVideoConfig();
 
     // Sort clips by trackId descending
